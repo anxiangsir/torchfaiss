@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TorchFAISS</title>
+    <meta
+      name="description"
+      content="TorchFAISS: Pure PyTorch distributed KMeans with a FAISS-compatible API."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <img src="./logo.svg" alt="TorchFAISS logo" class="logo" />
+      <p class="tagline">Pure PyTorch distributed KMeans with a FAISS-compatible API</p>
+      <div class="cta-row">
+        <a class="btn" href="https://github.com/anxiangsir/torchfaiss" target="_blank" rel="noreferrer">GitHub Repo</a>
+        <a class="btn ghost" href="https://github.com/anxiangsir/torchfaiss#installation" target="_blank" rel="noreferrer">Installation</a>
+      </div>
+    </header>
+
+    <main class="container">
+      <section>
+        <h2>Why TorchFAISS</h2>
+        <ul>
+          <li>FAISS-compatible API: <code>train</code>, <code>assign</code>, <code>centroids</code></li>
+          <li>Distributed KMeans with <code>torch.distributed</code> (NCCL)</li>
+          <li>Optional BF16 acceleration for distance matmul hot path</li>
+          <li>Built-in benchmark comparison and visualization pipeline</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Quick Install</h2>
+        <pre><code>pip install "git+https://github.com/anxiangsir/torchfaiss.git"</code></pre>
+      </section>
+
+      <section>
+        <h2>Quick Start</h2>
+        <pre><code>from torchfaiss import TorchKmeans
+
+km = TorchKmeans(d=768, k=1000, niter=20, gpu=True)
+km.train(x_train)
+D, I = km.assign(x_test)</code></pre>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Maintained by <strong>anxiangsir</strong> ·
+        <a href="https://github.com/anxiangsir/torchfaiss" target="_blank" rel="noreferrer">Repository</a>
+      </p>
+    </footer>
+  </body>
+</html>
