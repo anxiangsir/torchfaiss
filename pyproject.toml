@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=58", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torchfaiss"
+version = "0.1.0"
+description = "Pure PyTorch distributed KMeans with a FAISS-compatible API"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "anxiangsir", email = "anxiangsir@outlook.com" }
+]
+license = { text = "MIT" }
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "numpy>=1.24",
+  "torch>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/anxiangsir/torchfaiss"
+Repository = "https://github.com/anxiangsir/torchfaiss"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["torchfaiss*"]

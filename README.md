@@ -16,6 +16,40 @@ Pure PyTorch distributed KMeans implementation with a FAISS-compatible API (`tra
 pip install -r requirements.txt
 ```
 
+Install directly from GitHub (pip install git+):
+
+```bash
+pip install "git+https://github.com/anxiangsir/torchfaiss.git"
+
+# if your environment uses a restricted mirror, use:
+pip install --no-build-isolation "git+https://github.com/anxiangsir/torchfaiss.git"
+```
+
+Install a specific branch/tag/commit:
+
+```bash
+# branch
+pip install "git+https://github.com/anxiangsir/torchfaiss.git@main"
+
+# tag
+pip install "git+https://github.com/anxiangsir/torchfaiss.git@v0.1.0"
+
+# commit
+pip install "git+https://github.com/anxiangsir/torchfaiss.git@<commit_sha>"
+```
+
+> Note: editable install (`pip install -e .`) depends on newer build-backend support in your pip/setuptools environment. Standard install (`pip install .`) and wheel install work reliably.
+
+Build and install wheel (.whl):
+
+```bash
+python -m pip install --upgrade build
+python -m build --no-isolation
+
+# install built wheel
+pip install dist/torchfaiss-0.1.0-py3-none-any.whl
+```
+
 ## Quick Start
 
 ```python
