@@ -57,6 +57,32 @@ For this benchmark setup, the speedup comes mainly from **data parallelism over 
 
 In short: the benchmark is compute-heavy enough that splitting samples across GPUs yields substantial training-time gains while maintaining similar clustering quality.
 
+## TorchFAISS Design Philosophy
+
+TorchFAISS is designed around three principles:
+
+1. **FAISS-compatible surface, PyTorch-native internals**
+   - Keep migration cost low (`train/assign/centroids` interface)
+   - Use pure PyTorch + `torch.distributed`, no custom C++/CUDA extension burden
+
+2. **Scale-first KMeans implementation**
+   - Treat assignment as the dominant O(N·K·d) workload
+   - Prioritize sharding, batched compute, and communication-efficient centroid updates
+
+3. **Performance with numerical stability**
+   - Support optional BF16 in matmul hot path for speed
+   - Keep key accumulations/objective paths in FP32 for stable convergence behavior
+
+## Optimization Techniques in This Repo
+
+- **Distributed data-parallel Lloyd iterations**: each rank computes local assignment/statistics, then all-reduce for centroid updates.
+- **Batched nearest-centroid assignment**: avoids OOM and keeps GPU compute saturated.
+- **Distance identity optimization** (`||x-c||^2 = ||x||^2 - 2x·c + ||c||^2`): reduces redundant compute.
+- **Streaming assignment for large datasets**: chunk-based assignment on full train/val for 20× scale.
+- **Empty-cluster repair strategy**: split-largest-cluster style fallback to keep K fixed and training stable.
+- **Optional BF16 hot-path acceleration**: faster centroid-distance matmul when hardware supports BF16.
+- **Portable path defaults**: scripts default to repo-relative paths for reproducibility across machines.
+
 ## Benchmark Summary
 
 ### 1× ImageNet Features
@@ -115,22 +141,6 @@ The comparison image now includes both **full-range** and **zoomed** panels (low
 20× dataset:
 
 ![20x Curve Comparison](results_20x/evaluation_reports/curve_comparison.png)
-
-### Example Figures
-
-1× dataset (TorchFAISS):
-
-![1x ROC](results/evaluation_reports/torchfaiss_dist_8gpu/roc_curve.png)
-![1x PR](results/evaluation_reports/torchfaiss_dist_8gpu/pr_curve.png)
-![1x Confusion](results/evaluation_reports/torchfaiss_dist_8gpu/confusion_matrix_top50.png)
-![1x Cluster Diagnostics](results/evaluation_reports/torchfaiss_dist_8gpu/cluster_diagnostics.png)
-
-20× dataset (TorchFAISS):
-
-![20x ROC](results_20x/evaluation_reports/torchfaiss_dist_8gpu/roc_curve.png)
-![20x PR](results_20x/evaluation_reports/torchfaiss_dist_8gpu/pr_curve.png)
-![20x Confusion](results_20x/evaluation_reports/torchfaiss_dist_8gpu/confusion_matrix_top50.png)
-![20x Cluster Diagnostics](results_20x/evaluation_reports/torchfaiss_dist_8gpu/cluster_diagnostics.png)
 
 ## Reproducing the Full Pipeline
 
