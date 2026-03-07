@@ -7,9 +7,6 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Tuple
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import (
     adjusted_mutual_info_score,
@@ -29,7 +26,6 @@ from sklearn.metrics import (
 
 EPS = 1e-12
 TOP_CURVE_CLASSES = 5
-CONFUSION_TOP_N = 50
 CURVE_POINT_LIMIT = 512
 
 
@@ -293,77 +289,6 @@ def save_per_class_csv(
             })
 
 
-def plot_roc_curve(path: str, roc_data: Dict[str, Any]) -> None:
-    plt.figure(figsize=(8, 6))
-    plt.plot(roc_data["micro_fpr"], roc_data["micro_tpr"], label=f"micro AUC={roc_data['micro_auc']:.4f}", linewidth=2)
-    plt.plot(roc_data["macro_fpr"], roc_data["macro_tpr"], label=f"macro AUC={roc_data['macro_auc']:.4f}", linewidth=2)
-    for class_id, curve in roc_data["top_classes"].items():
-        plt.plot(curve["roc_fpr"], curve["roc_tpr"], linestyle="--", alpha=0.75, label=f"class {class_id}")
-    plt.plot([0, 1], [0, 1], color="gray", linestyle=":", linewidth=1)
-    plt.xlabel("False Positive Rate")
-    plt.ylabel("True Positive Rate")
-    plt.title("One-vs-Rest ROC Curves")
-    plt.legend(loc="lower right", fontsize=8)
-    plt.tight_layout()
-    plt.savefig(path, dpi=200)
-    plt.close()
-
-
-def plot_pr_curve(path: str, pr_data: Dict[str, Any]) -> None:
-    plt.figure(figsize=(8, 6))
-    plt.plot(pr_data["micro_recall"], pr_data["micro_precision"], label=f"micro AP={pr_data['micro_ap']:.4f}", linewidth=2)
-    plt.plot(pr_data["macro_recall"], pr_data["macro_precision"], label=f"macro AP={pr_data['macro_ap']:.4f}", linewidth=2)
-    for class_id, curve in pr_data["top_classes"].items():
-        plt.plot(curve["pr_recall"], curve["pr_precision"], linestyle="--", alpha=0.75, label=f"class {class_id}")
-    plt.xlabel("Recall")
-    plt.ylabel("Precision")
-    plt.title("One-vs-Rest Precision-Recall Curves")
-    plt.legend(loc="lower left", fontsize=8)
-    plt.tight_layout()
-    plt.savefig(path, dpi=200)
-    plt.close()
-
-
-def plot_confusion_matrix(path: str, confusion: np.ndarray, labels: np.ndarray) -> None:
-    support = confusion.sum(axis=1)
-    order = np.argsort(support)[::-1][: min(CONFUSION_TOP_N, len(labels))]
-    matrix = confusion[np.ix_(order, order)].astype(np.float64)
-    matrix = _safe_div(matrix, matrix.sum(axis=1, keepdims=True))
-
-    plt.figure(figsize=(11, 9))
-    plt.imshow(matrix, cmap="magma", aspect="auto", interpolation="nearest")
-    tick_labels = labels[order]
-    tick_positions = np.arange(len(order))
-    plt.xticks(tick_positions, tick_labels, rotation=90, fontsize=6)
-    plt.yticks(tick_positions, tick_labels, fontsize=6)
-    plt.xlabel("Predicted label")
-    plt.ylabel("True label")
-    plt.title(f"Normalized confusion matrix (top {len(order)} classes by support)")
-    plt.colorbar(fraction=0.046, pad=0.04)
-    plt.tight_layout()
-    plt.savefig(path, dpi=200)
-    plt.close()
-
-
-def plot_cluster_diagnostics(path: str, cluster_sizes: np.ndarray, cluster_purities: np.ndarray) -> None:
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-
-    sorted_sizes = np.sort(cluster_sizes)[::-1]
-    axes[0].plot(np.arange(1, len(sorted_sizes) + 1), sorted_sizes, linewidth=2)
-    axes[0].set_title("Cluster size rank curve")
-    axes[0].set_xlabel("Cluster rank")
-    axes[0].set_ylabel("Samples in cluster")
-
-    axes[1].hist(cluster_purities, bins=30, color="#4c72b0", alpha=0.9)
-    axes[1].set_title("Cluster purity distribution")
-    axes[1].set_xlabel("Purity")
-    axes[1].set_ylabel("Cluster count")
-
-    plt.tight_layout()
-    plt.savefig(path, dpi=200)
-    plt.close(fig)
-
-
 def compute_topk_accuracy(
     cluster_probs: np.ndarray,
     eval_assignments: np.ndarray,
@@ -463,20 +388,12 @@ def evaluate_saved_result(
     detailed_json_path = os.path.join(output_dir, "detailed_metrics.json")
     per_class_csv_path = os.path.join(output_dir, "per_class_metrics.csv")
     curve_data_path = os.path.join(output_dir, "curve_data.json")
-    roc_plot_path = os.path.join(output_dir, "roc_curve.png")
-    pr_plot_path = os.path.join(output_dir, "pr_curve.png")
-    confusion_plot_path = os.path.join(output_dir, "confusion_matrix_top50.png")
-    cluster_plot_path = os.path.join(output_dir, "cluster_diagnostics.png")
 
     with open(detailed_json_path, "w") as handle:
         json.dump(summary, handle, indent=2)
     with open(curve_data_path, "w") as handle:
         json.dump(curves, handle)
     save_per_class_csv(per_class_csv_path, per_class_metrics, per_class_curve_metrics)
-    plot_roc_curve(roc_plot_path, curves["roc"])
-    plot_pr_curve(pr_plot_path, curves["pr"])
-    plot_confusion_matrix(confusion_plot_path, confusion, class_labels)
-    plot_cluster_diagnostics(cluster_plot_path, cluster_label_counts.sum(axis=1), cluster_purities)
 
     return EvaluationArtifacts(
         summary=summary,
@@ -484,9 +401,5 @@ def evaluate_saved_result(
             "detailed_json": detailed_json_path,
             "curve_json": curve_data_path,
             "per_class_csv": per_class_csv_path,
-            "roc_plot": roc_plot_path,
-            "pr_plot": pr_plot_path,
-            "confusion_plot": confusion_plot_path,
-            "cluster_plot": cluster_plot_path,
         },
     )

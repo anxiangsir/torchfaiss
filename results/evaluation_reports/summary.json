@@ -59,11 +59,7 @@
       "artifacts": {
         "detailed_json": "evaluation_reports/torchfaiss_dist_8gpu/detailed_metrics.json",
         "curve_json": "evaluation_reports/torchfaiss_dist_8gpu/curve_data.json",
-        "per_class_csv": "evaluation_reports/torchfaiss_dist_8gpu/per_class_metrics.csv",
-        "roc_plot": "evaluation_reports/torchfaiss_dist_8gpu/roc_curve.png",
-        "pr_plot": "evaluation_reports/torchfaiss_dist_8gpu/pr_curve.png",
-        "confusion_plot": "evaluation_reports/torchfaiss_dist_8gpu/confusion_matrix_top50.png",
-        "cluster_plot": "evaluation_reports/torchfaiss_dist_8gpu/cluster_diagnostics.png"
+        "per_class_csv": "evaluation_reports/torchfaiss_dist_8gpu/per_class_metrics.csv"
       }
     },
     "FAISS (GPU)": {
@@ -122,11 +118,7 @@
       "artifacts": {
         "detailed_json": "evaluation_reports/faiss_gpu/detailed_metrics.json",
         "curve_json": "evaluation_reports/faiss_gpu/curve_data.json",
-        "per_class_csv": "evaluation_reports/faiss_gpu/per_class_metrics.csv",
-        "roc_plot": "evaluation_reports/faiss_gpu/roc_curve.png",
-        "pr_plot": "evaluation_reports/faiss_gpu/pr_curve.png",
-        "confusion_plot": "evaluation_reports/faiss_gpu/confusion_matrix_top50.png",
-        "cluster_plot": "evaluation_reports/faiss_gpu/cluster_diagnostics.png"
+        "per_class_csv": "evaluation_reports/faiss_gpu/per_class_metrics.csv"
       }
     }
   },
