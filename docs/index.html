@@ -297,11 +297,11 @@
 
                 <section id="benchmarks">
                     <h2>Benchmarks</h2>
-                    <p>Fair comparison: both FAISS and TorchFAISS use 8 GPUs. Numbers pending re-run — will be updated.</p>
+                    <p>Hardware: 8× NVIDIA A800-SXM4-80GB. Data: ImageNet CLIP features (d=768), k=1000, niter=20. Train time only.</p>
                     
                     <div class="benchmark-grid">
                         <div class="benchmark-card">
-                            <h3>1× ImageNet (1.2M points)</h3>
+                            <h3>1× ImageNet (1.28M vectors)</h3>
                             <p class="card-meta">d=768 (CLIP), k=1000, niter=20</p>
                             <table class="academic-table">
                                 <thead>
@@ -316,21 +316,21 @@
                                     <tr>
                                         <td>FAISS</td>
                                         <td>8</td>
-                                        <td class="muted-col">TBD</td>
+                                        <td class="muted-col">13.78 s</td>
                                         <td class="muted-col">1.0×</td>
                                     </tr>
                                     <tr class="highlight-row">
                                         <td>TorchKmeans</td>
                                         <td>8</td>
-                                        <td>TBD</td>
-                                        <td><span class="accent-text">TBD</span></td>
+                                        <td>1.03 s</td>
+                                        <td><span class="accent-text">13.4×</span></td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
 
                         <div class="benchmark-card">
-                            <h3>20× ImageNet (24M points)</h3>
+                            <h3>20× ImageNet (25.6M vectors)</h3>
                             <p class="card-meta">d=768 (CLIP), k=1000, niter=20</p>
                             <table class="academic-table">
                                 <thead>
@@ -345,14 +345,14 @@
                                     <tr>
                                         <td>FAISS</td>
                                         <td>8</td>
-                                        <td class="muted-col">TBD</td>
+                                        <td class="muted-col">38.03 s</td>
                                         <td class="muted-col">1.0×</td>
                                     </tr>
                                     <tr class="highlight-row">
                                         <td>TorchKmeans</td>
                                         <td>8</td>
-                                        <td>TBD</td>
-                                        <td><span class="accent-text">TBD</span></td>
+                                        <td>9.27 s</td>
+                                        <td><span class="accent-text">4.1×</span></td>
                                     </tr>
                                 </tbody>
                             </table>
