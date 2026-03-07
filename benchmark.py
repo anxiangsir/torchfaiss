@@ -44,6 +44,7 @@ def main():
     parser.add_argument("--k", type=int, default=1000)
     parser.add_argument("--niter", type=int, default=20)
     parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--bf16", action="store_true")
     args = parser.parse_args()
 
     dist.init_process_group(backend="nccl")
@@ -82,7 +83,7 @@ def main():
     dist.barrier()
     km = TorchKmeans(
         d=train_features.shape[1], k=args.k, niter=args.niter,
-        verbose=True, seed=args.seed, distributed=True,
+        verbose=True, seed=args.seed, distributed=True, bf16=args.bf16,
     )
 
     t0 = time.time()
@@ -133,6 +134,7 @@ def main():
         result_json = {
             "method": f"TorchFAISS Dist({world_size}GPU)",
             "k": args.k, "niter": args.niter,
+            "bf16": args.bf16,
             "train_time": round(train_time, 3),
             "assign_train_time": round(assign_train_time, 3),
             "assign_val_time": round(assign_val_time, 3),

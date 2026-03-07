@@ -76,6 +76,7 @@ class TorchKmeans:
         frozen_centroids: bool = False,
         gpu: Union[bool, int] = False,
         distributed: bool = False,
+        bf16: bool = False,
     ):
         self.d = d
         self.k = k
@@ -88,6 +89,7 @@ class TorchKmeans:
         self.min_points_per_centroid = min_points_per_centroid
         self.frozen_centroids = frozen_centroids
         self.distributed = distributed
+        self.bf16 = bf16
         self.centroids: Optional[np.ndarray] = None
 
         # Resolve device
@@ -105,11 +107,23 @@ class TorchKmeans:
         else:
             self.device = torch.device("cpu")
 
+        self._bf16_enabled = (
+            self.bf16
+            and self.device.type == "cuda"
+            and torch.cuda.is_available()
+            and torch.cuda.is_bf16_supported()
+        )
+
     def _to_tensor(self, x: ArrayLike) -> torch.Tensor:
         """Convert input to float32 torch.Tensor on self.device."""
         if isinstance(x, np.ndarray):
             x = torch.from_numpy(x)
         return x.float().to(self.device)
+
+    def _dot(self, xb: torch.Tensor, centroids: torch.Tensor) -> torch.Tensor:
+        if self._bf16_enabled:
+            return (xb.to(torch.bfloat16) @ centroids.to(torch.bfloat16).t()).float()
+        return xb @ centroids.t()
 
     def _log(self, msg: str):
         if self.verbose:
@@ -178,8 +192,8 @@ class TorchKmeans:
             n_tensor = torch.tensor([n_local], device=self.device, dtype=torch.long)
             all_n = [torch.zeros(1, dtype=torch.long, device=self.device) for _ in range(self._world_size)]
             dist.all_gather(all_n, n_tensor)
-            all_n_list = [s.item() for s in all_n]
-            max_n = max(all_n_list)
+            all_n_list = [int(s.item()) for s in all_n]
+            max_n = int(max(all_n_list))
 
             # Pad and gather candidates
             padded = torch.zeros(max_n, self.d, device=self.device)
@@ -230,7 +244,7 @@ class TorchKmeans:
             x_sq = (xb * xb).sum(dim=1)
 
             # x · c^T  [bs, k]
-            dots = xb @ centroids.t()
+            dots = self._dot(xb, centroids)
 
             # ||x - c||^2 = ||x||^2 - 2*x·c + ||c||^2
             dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)  # [bs, k]
@@ -271,7 +285,7 @@ class TorchKmeans:
 
         # Find empty clusters
         empty_mask = counts == 0
-        n_empty = empty_mask.sum().item()
+        n_empty = int(empty_mask.sum().item())
 
         # Compute means (avoid div by zero)
         safe_counts = counts.clamp(min=1).float().unsqueeze(1)
@@ -281,7 +295,7 @@ class TorchKmeans:
         if n_empty > 0:
             # Find the cluster with most points
             for empty_idx in torch.where(empty_mask)[0]:
-                largest_idx = counts.argmax().item()
+                largest_idx = int(counts.argmax().item())
                 # Split: perturb the largest centroid
                 noise = torch.randn(d, device=self.device) * 1e-4
                 new_centroids[empty_idx] = new_centroids[largest_idx] + noise
@@ -294,7 +308,7 @@ class TorchKmeans:
         if self.spherical:
             new_centroids = new_centroids / new_centroids.norm(dim=-1, keepdim=True).clamp(min=1e-8)
 
-        return new_centroids, counts, n_empty
+        return new_centroids, counts, int(n_empty)
 
     def _train_once(self, x: torch.Tensor, seed: int) -> Tuple[torch.Tensor, float]:
         """Single KMeans run (one restart)."""
@@ -304,11 +318,9 @@ class TorchKmeans:
         self._log(f"  Preprocessing in {time.time() - t0:.2f} s")
 
         for it in range(self.niter):
-            t_iter = time.time()
-
             # E-step: assign
             t_search = time.time()
-            D, I = self._assign_batch(x, centroids)
+            D, assign_idx = self._assign_batch(x, centroids)
             search_time = time.time() - t_search
 
             # Compute objective (total distance)
@@ -324,7 +336,7 @@ class TorchKmeans:
             total_n = local_n.item()
 
             counts = torch.zeros(self.k, device=self.device, dtype=torch.long)
-            counts.scatter_add_(0, I, torch.ones_like(I))
+            counts.scatter_add_(0, assign_idx, torch.ones_like(assign_idx))
             if self.distributed:
                 dist.all_reduce(counts, op=dist.ReduceOp.SUM)
             
@@ -334,11 +346,10 @@ class TorchKmeans:
 
             # M-step: update centroids
             if not self.frozen_centroids:
-                centroids, _, n_split = self._update_centroids(x, I, centroids)
+                centroids, _, n_split = self._update_centroids(x, assign_idx, centroids)
             else:
                 n_split = 0
 
-            iter_time = time.time() - t_iter
             total_time = time.time() - t0
 
             self._log(
@@ -382,6 +393,10 @@ class TorchKmeans:
             f"Clustering {total_n} points in {self.d}D to {self.k} clusters, "
             f"redo {self.nredo} times, {self.niter} iterations"
         )
+        if self.bf16 and not self._bf16_enabled:
+            self._log("BF16 requested but unavailable on current device; falling back to FP32")
+        if self._bf16_enabled:
+            self._log("BF16 enabled for centroid distance matmul")
 
         best_centroids = None
         best_obj = float("inf")
@@ -398,6 +413,7 @@ class TorchKmeans:
                 best_centroids = centroids.clone()
 
         # Store as numpy (FAISS convention)
+        assert best_centroids is not None
         self.centroids = best_centroids.cpu().numpy()
         self._log(f"Final objective: {best_obj:.0f}")
 
@@ -431,7 +447,7 @@ class TorchKmeans:
                 end = min(start + batch_size, n)
                 xb = torch.from_numpy(x[start:end]).float().to(self.device)
                 x_sq = (xb * xb).sum(dim=1)
-                dots = xb @ centroids.t()
+                dots = self._dot(xb, centroids)
                 dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)
                 dists.clamp_(min=0.0)
                 min_d, min_i = dists.min(dim=1)
@@ -441,5 +457,5 @@ class TorchKmeans:
         else:
             # Tensor path — move to device and batch
             x = x.float().to(self.device)
-            D, I = self._assign_batch(x, centroids, batch_size=batch_size)
-            return D.cpu().numpy(), I.cpu().numpy()
+            D, assign_idx = self._assign_batch(x, centroids, batch_size=batch_size)
+            return D.cpu().numpy(), assign_idx.cpu().numpy()

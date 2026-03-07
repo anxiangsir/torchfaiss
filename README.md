@@ -38,6 +38,14 @@ km.train(x_local_shard)
 D, I = km.assign(x_test)
 ```
 
+BF16 (optional, CUDA device must support BF16):
+
+```python
+km = TorchKmeans(d=768, k=1000, niter=20, distributed=True, bf16=True)
+```
+
+`bf16=True` uses BF16 for the distance matmul hot path and keeps accumulations/objective in FP32 for stability.
+
 ## Why TorchFAISS Is Faster Than FAISS Here
 
 For this benchmark setup, the speedup comes mainly from **data parallelism over training points** in Lloyd iterations:
@@ -124,6 +132,10 @@ python create_20x_features.py --src_dir ./features --dst_dir ./features_20x --sc
 # 3) TorchFAISS benchmarks
 torchrun --nproc_per_node=8 benchmark.py --feature_dir ./features --result_dir ./results
 torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x
+
+# optional BF16 speed mode
+torchrun --nproc_per_node=8 benchmark.py --feature_dir ./features --result_dir ./results --bf16
+torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x --bf16
 
 # 4) FAISS benchmarks (run in env with faiss installed)
 python benchmark_faiss.py --feature_dir ./features --result_dir ./results
