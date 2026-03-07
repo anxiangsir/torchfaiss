@@ -1,0 +1,163 @@
+"""
+Benchmark: FAISS KMeans (GPU) on 20x ImageNet CLIP features.
+
+Single process, uses all GPUs via FAISS's multi-GPU support.
+
+Usage:
+    python benchmark_faiss_20x.py
+"""
+
+import os
+import time
+import json
+import argparse
+import numpy as np
+
+
+def compute_metrics(labels_true, labels_pred):
+    """Compute NMI and Purity."""
+    from sklearn.metrics import normalized_mutual_info_score
+    from collections import Counter
+    nmi = normalized_mutual_info_score(labels_true, labels_pred)
+    total = len(labels_true)
+    purity_sum = 0
+    for cid in np.unique(labels_pred):
+        mask = labels_pred == cid
+        if mask.sum() == 0:
+            continue
+        counter = Counter(labels_true[mask])
+        purity_sum += counter.most_common(1)[0][1]
+    purity = purity_sum / total
+    return nmi, purity
+
+
+def main():
+    repo_dir = os.path.dirname(os.path.abspath(__file__))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--feature_dir", type=str, default=os.path.join(repo_dir, "features_20x"))
+    parser.add_argument("--result_dir", type=str, default=os.path.join(repo_dir, "results_20x"))
+    parser.add_argument("--k", type=int, default=1000)
+    parser.add_argument("--niter", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--gpu", action="store_true", default=True)
+    args = parser.parse_args()
+
+    import faiss
+    print(f"FAISS version: {faiss.__version__}")
+    print(f"FAISS GPU count: {faiss.get_num_gpus()}")
+
+    # Memory-map train features
+    train_features = np.load(os.path.join(args.feature_dir, "train_features.npy"), mmap_mode="r")
+    n_train, d = train_features.shape
+
+    print("=" * 80)
+    print("FAISS KMeans Benchmark (20x)")
+    print("=" * 80)
+    print(f"Train: {train_features.shape}")
+    print(f"K={args.k}, niter={args.niter}, gpu={args.gpu}")
+    print("=" * 80)
+
+    km = faiss.Kmeans(
+        d, args.k,
+        niter=args.niter,
+        verbose=True,
+        gpu=args.gpu,
+        seed=args.seed,
+    )
+
+    # FAISS Kmeans.train handles subsampling internally
+    # But it expects a contiguous float32 array — load into RAM
+    print("Loading train features into RAM for FAISS training...")
+    train_features_ram = np.array(train_features, dtype=np.float32)
+    print(f"Loaded: {train_features_ram.shape} ({train_features_ram.nbytes / 1e9:.1f} GB)")
+
+    # Train
+    t0 = time.time()
+    km.train(train_features_ram)
+    train_time = time.time() - t0
+
+    # Build index for assignment (FAISS uses an internal index)
+    # km.index is already built after training
+
+    # Assign train set in chunks (25M vectors can't fit in GPU at once)
+    print(f"\nAssigning train set ({n_train:,} vectors) ...")
+    chunk_size = 1_000_000
+    D_train_list = []
+    I_train_list = []
+    t0 = time.time()
+    for cs in range(0, n_train, chunk_size):
+        ce = min(cs + chunk_size, n_train)
+        chunk = train_features_ram[cs:ce]
+        D_chunk, I_chunk = km.assign(chunk)
+        D_train_list.append(D_chunk)
+        I_train_list.append(I_chunk)
+        print(f"  Assigned {ce:,}/{n_train:,} ...", flush=True)
+    D_train = np.concatenate(D_train_list)
+    I_train = np.concatenate(I_train_list)
+    assign_train_time = time.time() - t0
+    train_obj = D_train.sum()
+
+    del train_features_ram  # free RAM
+
+    # Assign val set
+    val_features = np.load(os.path.join(args.feature_dir, "val_features.npy"))
+    val_labels = np.load(os.path.join(args.feature_dir, "val_labels.npy"))
+    print(f"Assigning val set ({val_features.shape[0]:,} vectors) ...")
+    t0 = time.time()
+    D_val, I_val = km.assign(val_features)
+    assign_val_time = time.time() - t0
+    val_obj = D_val.sum()
+
+    # Metrics
+    train_labels = np.load(os.path.join(args.feature_dir, "train_labels.npy"))
+    nmi_train, purity_train = compute_metrics(train_labels, I_train)
+    nmi_val, purity_val = compute_metrics(val_labels, I_val)
+
+    print("\n" + "=" * 80)
+    print(f"RESULTS: FAISS KMeans ({'GPU' if args.gpu else 'CPU'}) — 20x Data")
+    print("=" * 80)
+    print(f"  Train vectors:  {n_train:,}")
+    print(f"  Val vectors:    {val_features.shape[0]:,}")
+    print(f"  Train time:     {train_time:.2f} s")
+    print(f"  Assign time:    {assign_train_time:.2f} s (train), {assign_val_time:.2f} s (val)")
+    print(f"  Train Obj:      {train_obj:.0f}")
+    print(f"  Val Obj:        {val_obj:.0f}")
+    print(f"  Train NMI:      {nmi_train:.4f}")
+    print(f"  Train Purity:   {purity_train:.4f}")
+    print(f"  Val NMI:        {nmi_val:.4f}")
+    print(f"  Val Purity:     {purity_val:.4f}")
+
+    # Save results
+    centroids = km.centroids
+    assert centroids is not None
+    os.makedirs(args.result_dir, exist_ok=True)
+    np.savez(
+        os.path.join(args.result_dir, "faiss_result.npz"),
+        centroids=centroids,
+        train_assignments=I_train,
+        val_assignments=I_val,
+        train_distances=D_train,
+        val_distances=D_val,
+    )
+    result_json = {
+        "method": f"FAISS ({'GPU' if args.gpu else 'CPU'})",
+        "k": args.k, "niter": args.niter,
+        "n_train": int(n_train),
+        "n_val": int(val_features.shape[0]),
+        "train_time": round(train_time, 3),
+        "assign_train_time": round(assign_train_time, 3),
+        "assign_val_time": round(assign_val_time, 3),
+        "train_obj": float(train_obj),
+        "val_obj": float(val_obj),
+        "train_nmi": round(nmi_train, 4),
+        "train_purity": round(purity_train, 4),
+        "val_nmi": round(nmi_val, 4),
+        "val_purity": round(purity_val, 4),
+    }
+    with open(os.path.join(args.result_dir, "faiss_result.json"), "w") as f:
+        json.dump(result_json, f, indent=2)
+    print(f"\nResults saved to {args.result_dir}/")
+
+
+if __name__ == "__main__":
+    main()

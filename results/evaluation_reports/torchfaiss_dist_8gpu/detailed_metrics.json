@@ -1,0 +1,52 @@
+{
+  "method": "TorchFAISS Dist(8GPU)",
+  "split": "val",
+  "n_samples": 50000,
+  "n_classes": 1000,
+  "n_clusters": 1000,
+  "clustering": {
+    "nmi": 0.7939519129583529,
+    "ami": 0.6414816724641617,
+    "ari": 0.4075736286450436,
+    "rand": 0.9986955115102302,
+    "fowlkes_mallows": 0.41074893440570603,
+    "homogeneity": 0.7867255028020186,
+    "completeness": 0.8013123091686551,
+    "v_measure": 0.793951912958353,
+    "purity": 0.5333
+  },
+  "classification": {
+    "accuracy": 0.5179,
+    "balanced_accuracy": 0.5178999999999999,
+    "precision_macro": 0.4820963571437556,
+    "recall_macro": 0.5178999999999999,
+    "f1_macro": 0.48135386723647566,
+    "precision_weighted": 0.48209635714375565,
+    "recall_weighted": 0.5179,
+    "f1_weighted": 0.48135386723647566,
+    "precision_micro": 0.5179,
+    "recall_micro": 0.5179,
+    "f1_micro": 0.5179,
+    "top1_accuracy": 0.51782,
+    "top5_accuracy": 0.78906
+  },
+  "classification_mapping": {
+    "hard_prediction": "cluster->majority IN1K label from train split",
+    "soft_score": "P(class|cluster) estimated from train split"
+  },
+  "curves": {
+    "roc_auc_micro": 0.986665379095095,
+    "roc_auc_macro": 0.9849388558558558,
+    "average_precision_micro": 0.5884085076967837,
+    "average_precision_macro": 0.4587559039019512
+  },
+  "cluster_stats": {
+    "mean_cluster_size": 1281.168,
+    "std_cluster_size": 544.2449372993744,
+    "mean_cluster_purity": 0.5743260700961673,
+    "median_cluster_purity": 0.5639014937649429,
+    "min_cluster_purity": 0.019157088122605363,
+    "max_cluster_purity": 1.0,
+    "non_empty_clusters": 1000
+  }
+}

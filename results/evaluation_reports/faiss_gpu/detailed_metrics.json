@@ -1,0 +1,52 @@
+{
+  "method": "FAISS (GPU)",
+  "split": "val",
+  "n_samples": 50000,
+  "n_classes": 1000,
+  "n_clusters": 1000,
+  "clustering": {
+    "nmi": 0.7916207701976838,
+    "ami": 0.6369368371433033,
+    "ari": 0.40293556302631517,
+    "rand": 0.9986982003640072,
+    "fowlkes_mallows": 0.4056966658207059,
+    "homogeneity": 0.7848523197703686,
+    "completeness": 0.7985069763657153,
+    "v_measure": 0.7916207701976838,
+    "purity": 0.53002
+  },
+  "classification": {
+    "accuracy": 0.51378,
+    "balanced_accuracy": 0.51378,
+    "precision_macro": 0.4784911054932451,
+    "recall_macro": 0.51378,
+    "f1_macro": 0.47870426636801017,
+    "precision_weighted": 0.47849110549324514,
+    "recall_weighted": 0.51378,
+    "f1_weighted": 0.4787042663680101,
+    "precision_micro": 0.51378,
+    "recall_micro": 0.51378,
+    "f1_micro": 0.51378,
+    "top1_accuracy": 0.5138,
+    "top5_accuracy": 0.79028
+  },
+  "classification_mapping": {
+    "hard_prediction": "cluster->majority IN1K label from train split",
+    "soft_score": "P(class|cluster) estimated from train split"
+  },
+  "curves": {
+    "roc_auc_micro": 0.9861506954776778,
+    "roc_auc_macro": 0.9844599201201202,
+    "average_precision_micro": 0.5790407824212287,
+    "average_precision_macro": 0.45011219621170667
+  },
+  "cluster_stats": {
+    "mean_cluster_size": 1281.168,
+    "std_cluster_size": 511.6567147766166,
+    "mean_cluster_purity": 0.5666667582608297,
+    "median_cluster_purity": 0.556623496358868,
+    "min_cluster_purity": 0.017687661777394306,
+    "max_cluster_purity": 1.0,
+    "non_empty_clusters": 1000
+  }
+}
