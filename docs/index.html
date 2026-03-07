@@ -1,56 +1,426 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TorchFAISS</title>
-    <meta
-      name="description"
-      content="TorchFAISS: Pure PyTorch distributed KMeans with a FAISS-compatible API."
-    />
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <header class="hero">
-      <img src="./logo.svg" alt="TorchFAISS logo" class="logo" />
-      <p class="tagline">Pure PyTorch distributed KMeans with a FAISS-compatible API</p>
-      <div class="cta-row">
-        <a class="btn" href="https://github.com/anxiangsir/torchfaiss" target="_blank" rel="noreferrer">GitHub Repo</a>
-        <a class="btn ghost" href="https://github.com/anxiangsir/torchfaiss#installation" target="_blank" rel="noreferrer">Installation</a>
-      </div>
-    </header>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TorchFAISS | High-Performance PyTorch KMeans</title>
+    <meta name="description" content="Pure PyTorch Distributed KMeans with a FAISS-Compatible API.">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Serif:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-wrapper">
+                    <img src="logo.svg" alt="TorchFAISS Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" class="logo-img">
+                    <span class="logo-text" style="display:none;">TorchFAISS</span>
+                </div>
+                <div class="version">v0.1.0</div>
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><a href="#overview">Overview</a></li>
+                    <li><a href="#installation">Installation</a></li>
+                    <li>
+                        <a href="#quick-start">Quick Start</a>
+                        <ul class="subnav">
+                            <li><a href="#qs-single">Single GPU</a></li>
+                            <li><a href="#qs-dist">Distributed</a></li>
+                            <li><a href="#qs-bf16">BF16 Support</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#api-reference">API Reference</a>
+                        <ul class="subnav">
+                            <li><a href="#api-torchkmeans">TorchKmeans</a></li>
+                            <li><a href="#api-train">train()</a></li>
+                            <li><a href="#api-assign">assign()</a></li>
+                            <li><a href="#api-centroids">centroids</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#benchmarks">Benchmarks</a></li>
+                    <li><a href="#philosophy">Design Philosophy</a></li>
+                    <li><a href="#citation">Citation</a></li>
+                </ul>
+            </nav>
+        </aside>
 
-    <main class="container">
-      <section>
-        <h2>Why TorchFAISS</h2>
-        <ul>
-          <li>FAISS-compatible API: <code>train</code>, <code>assign</code>, <code>centroids</code></li>
-          <li>Distributed KMeans with <code>torch.distributed</code> (NCCL)</li>
-          <li>Optional BF16 acceleration for distance matmul hot path</li>
-          <li>Built-in benchmark comparison and visualization pipeline</li>
-        </ul>
-      </section>
+        <main class="content">
+            <header class="mobile-header">
+                <div class="mobile-logo">TorchFAISS</div>
+                <button class="menu-toggle" aria-label="Toggle Menu" onclick="document.querySelector('.sidebar').classList.toggle('active')">☰</button>
+            </header>
 
-      <section>
-        <h2>Quick Install</h2>
-        <pre><code>pip install "git+https://github.com/anxiangsir/torchfaiss.git"</code></pre>
-      </section>
+            <section id="hero" class="hero">
+                <div class="hero-content">
+                    <h1 class="hero-title">TorchFAISS</h1>
+                    <p class="hero-tagline">Pure PyTorch Distributed KMeans with a FAISS-Compatible API.</p>
+                    <div class="badges">
+                        <span class="badge badge-primary">FAISS Compatible</span>
+                        <span class="badge badge-accent">Multi-GPU</span>
+                        <span class="badge badge-outline">Pure PyTorch</span>
+                        <span class="badge badge-outline">BF16 Ready</span>
+                        <a href="https://github.com/anxiangsir/torchfaiss" target="_blank" class="badge badge-github">GitHub</a>
+                    </div>
+                </div>
+                <div class="hero-bg-accent"></div>
+            </section>
 
-      <section>
-        <h2>Quick Start</h2>
-        <pre><code>from torchfaiss import TorchKmeans
+            <article class="document">
+                <section id="overview">
+                    <h2>Overview</h2>
+                    <p>
+                        TorchFAISS is a high-performance, distributed clustering library designed to bridge the gap between PyTorch's native ecosystem and the industry-standard FAISS API. It allows researchers and practitioners to seamlessly drop in GPU-accelerated KMeans clustering without converting tensors to numpy arrays or leaving the PyTorch memory domain.
+                    </p>
+                    <div class="admonition admonition-note">
+                        <div class="admonition-title">Why another KMeans?</div>
+                        <p>While FAISS is incredibly fast, moving data back and forth between PyTorch CUDA tensors and FAISS GPU resources introduces severe pipeline bottlenecks. TorchFAISS keeps your tensors on the device, utilizes native PyTorch autograd-free operations, and natively supports DistributedDataParallel (DDP) for multi-node clustering.</p>
+                    </div>
+                </section>
 
-km = TorchKmeans(d=768, k=1000, niter=20, gpu=True)
-km.train(x_train)
-D, I = km.assign(x_test)</code></pre>
-      </section>
-    </main>
+                <section id="installation">
+                    <h2>Installation</h2>
+                    <p>Requires Python 3.8+ and PyTorch 2.0+.</p>
+                    <div class="code-block" data-lang="bash">
+                        <div class="code-header">
+                            <span class="dots"><i></i><i></i><i></i></span>
+                            <span class="lang-label">bash</span>
+                        </div>
+                        <pre><code><span class="cmd">pip</span> install git+https://github.com/anxiangsir/torchfaiss.git</code></pre>
+                    </div>
+                </section>
 
-    <footer>
-      <p>
-        Maintained by <strong>anxiangsir</strong> ·
-        <a href="https://github.com/anxiangsir/torchfaiss" target="_blank" rel="noreferrer">Repository</a>
-      </p>
-    </footer>
-  </body>
+                <section id="quick-start">
+                    <h2>Quick Start</h2>
+
+                    <h3 id="qs-single">Single GPU Training</h3>
+                    <p>The API is designed to be a 1:1 drop-in replacement for <code>faiss.Kmeans</code>.</p>
+                    <div class="code-block" data-lang="python">
+                        <div class="code-header">
+                            <span class="dots"><i></i><i></i><i></i></span>
+                            <span class="lang-label">python</span>
+                        </div>
+                        <pre><code><span class="k">import</span> <span class="n">torch</span>
+<span class="k">from</span> <span class="nn">torchfaiss</span> <span class="k">import</span> <span class="nc">TorchKmeans</span>
+
+<span class="c"># Generate dummy data directly on GPU</span>
+<span class="n">d</span>, <span class="n">k</span> <span class="o">=</span> <span class="mi">128</span>, <span class="mi">1024</span>
+<span class="n">x</span> <span class="o">=</span> <span class="n">torch</span>.<span class="nf">randn</span>(<span class="mi">100000</span>, <span class="n">d</span>, <span class="kw">device</span>=<span class="s">'cuda'</span>)
+
+<span class="c"># Initialize and train</span>
+<span class="n">kmeans</span> <span class="o">=</span> <span class="nc">TorchKmeans</span>(<span class="kw">d</span>=<span class="n">d</span>, <span class="kw">k</span>=<span class="n">k</span>, <span class="kw">gpu</span>=<span class="kc">True</span>, <span class="kw">niter</span>=<span class="mi">20</span>, <span class="kw">verbose</span>=<span class="kc">True</span>)
+<span class="n">kmeans</span>.<span class="nf">train</span>(<span class="n">x</span>)
+
+<span class="c"># Assign new points to clusters</span>
+<span class="n">D</span>, <span class="n">I</span> <span class="o">=</span> <span class="n">kmeans</span>.<span class="nf">assign</span>(<span class="n">x</span>[:<span class="mi">10</span>])
+<span class="nb">print</span>(<span class="s">f"Centroids shape: {</span><span class="n">kmeans</span>.<span class="n">centroids</span>.<span class="n">shape</span><span class="s">}"</span>)</code></pre>
+                    </div>
+
+                    <h3 id="qs-dist">Distributed (Multi-GPU/Multi-Node)</h3>
+                    <p>TorchFAISS leverages <code>torch.distributed</code> to synchronize centroids across devices. Simply pass local shards to <code>train()</code>.</p>
+                    <div class="code-block" data-lang="python">
+                        <div class="code-header">
+                            <span class="dots"><i></i><i></i><i></i></span>
+                            <span class="lang-label">python</span>
+                        </div>
+                        <pre><code><span class="k">import</span> <span class="nn">torch.distributed</span> <span class="k">as</span> <span class="nn">dist</span>
+<span class="k">from</span> <span class="nn">torchfaiss</span> <span class="k">import</span> <span class="nc">TorchKmeans</span>
+
+<span class="n">dist</span>.<span class="nf">init_process_group</span>(<span class="s">"nccl"</span>)
+<span class="n">local_x</span> <span class="o">=</span> <span class="nf">get_local_shard_from_loader</span>() <span class="c"># [N_local, d]</span>
+
+<span class="n">kmeans</span> <span class="o">=</span> <span class="nc">TorchKmeans</span>(
+    <span class="kw">d</span>=<span class="n">d</span>, <span class="kw">k</span>=<span class="n">k</span>, 
+    <span class="kw">gpu</span>=<span class="kc">True</span>, 
+    <span class="kw">distributed</span>=<span class="kc">True</span> <span class="c"># Enable all-reduce during training</span>
+)
+<span class="c"># Each rank trains on its local shard; centroids stay synced</span>
+<span class="n">kmeans</span>.<span class="nf">train</span>(<span class="n">local_x</span>)</code></pre>
+                    </div>
+
+                    <h3 id="qs-bf16">BF16 Acceleration</h3>
+                    <p>For Ampere and newer GPUs, BFloat16 matrix multiplications significantly speed up distance calculations.</p>
+                    <div class="code-block" data-lang="python">
+                        <div class="code-header">
+                            <span class="dots"><i></i><i></i><i></i></span>
+                            <span class="lang-label">python</span>
+                        </div>
+                        <pre><code><span class="n">kmeans</span> <span class="o">=</span> <span class="nc">TorchKmeans</span>(<span class="kw">d</span>=<span class="n">d</span>, <span class="kw">k</span>=<span class="n">k</span>, <span class="kw">gpu</span>=<span class="kc">True</span>, <span class="kw">bf16</span>=<span class="kc">True</span>)</code></pre>
+                    </div>
+                </section>
+
+                <hr class="section-divider">
+
+                <section id="api-reference">
+                    <h2>API Reference</h2>
+                    
+                    <div id="api-torchkmeans" class="api-entity">
+                        <div class="api-signature">
+                            <span class="k">class</span> <span class="nc">TorchKmeans</span>(
+                            <span class="kw">d</span>, <span class="kw">k</span>, <span class="kw">niter</span>=<span class="mi">20</span>, <span class="kw">nredo</span>=<span class="mi">1</span>, <span class="kw">...</span> )
+                        </div>
+                        <p class="api-desc">The core clustering engine, mirroring <code>faiss.Kmeans</code> initialization. Handles device placement, distribution flags, and precision configurations.</p>
+                        
+                        <h4>Parameters</h4>
+                        <div class="table-responsive">
+                            <table class="academic-table">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Type</th>
+                                        <th>Default</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><code>d</code></td>
+                                        <td><span class="type-badge">int</span></td>
+                                        <td><span class="req-badge">required</span></td>
+                                        <td>Dimension of the input vectors.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>k</code></td>
+                                        <td><span class="type-badge">int</span></td>
+                                        <td><span class="req-badge">required</span></td>
+                                        <td>Number of clusters (centroids).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>niter</code></td>
+                                        <td><span class="type-badge">int</span></td>
+                                        <td><code>20</code></td>
+                                        <td>Lloyd iterations per restart.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>nredo</code></td>
+                                        <td><span class="type-badge">int</span></td>
+                                        <td><code>1</code></td>
+                                        <td>Independent restarts (keeps the one with lowest objective).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>verbose</code></td>
+                                        <td><span class="type-badge">bool</span></td>
+                                        <td><code>False</code></td>
+                                        <td>Print training progress and objective value.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>spherical</code></td>
+                                        <td><span class="type-badge">bool</span></td>
+                                        <td><code>False</code></td>
+                                        <td>If True, L2-normalize centroids (cosine similarity clustering).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>seed</code></td>
+                                        <td><span class="type-badge">int</span></td>
+                                        <td><code>1234</code></td>
+                                        <td>Random seed for initial centroid selection.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>max_points_per_centroid</code></td>
+                                        <td><span class="type-badge">int</span></td>
+                                        <td><code>256</code></td>
+                                        <td>Maximum training points per centroid (handles subsampling).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>min_points_per_centroid</code></td>
+                                        <td><span class="type-badge">int</span></td>
+                                        <td><code>39</code></td>
+                                        <td>Minimum training points per centroid (emits warning if breached).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>frozen_centroids</code></td>
+                                        <td><span class="type-badge">bool</span></td>
+                                        <td><code>False</code></td>
+                                        <td>Skip centroid update step, only performs assignments.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>gpu</code></td>
+                                        <td><span class="type-badge">bool</span> | <span class="type-badge">int</span></td>
+                                        <td><code>False</code></td>
+                                        <td><code>True</code> for auto GPU, <code>int</code> for specific device ID, <code>False</code> for CPU.</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>distributed</code></td>
+                                        <td><span class="type-badge">bool</span></td>
+                                        <td><code>False</code></td>
+                                        <td>Use <code>torch.distributed</code> (requires initialized process group).</td>
+                                    </tr>
+                                    <tr>
+                                        <td><code>bf16</code></td>
+                                        <td><span class="type-badge">bool</span></td>
+                                        <td><code>False</code></td>
+                                        <td>Enable BFloat16 for distance matmul hot path (requires CUDA BF16 support).</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div id="api-train" class="api-entity">
+                        <div class="api-signature">
+                            <span class="k">def</span> <span class="nf">train</span>(
+                            <span class="kw">x</span>: <span class="type">np.ndarray | torch.Tensor</span> ) &rarr; <span class="type">None</span>
+                        </div>
+                        <p class="api-desc">Runs the KMeans algorithm on the input vectors.</p>
+                        <ul class="api-list">
+                            <li><strong>x</strong>: Input data of shape <code>[N, d]</code>. If distributed mode is active, <code>x</code> should be the local shard for this rank.</li>
+                            <li><strong>Behavior</strong>: Automatically handles subsampling if <code>N > k * max_points_per_centroid</code>. Initializes centroids and runs <code>niter</code> Lloyd iterations.</li>
+                        </ul>
+                    </div>
+
+                    <div id="api-assign" class="api-entity">
+                        <div class="api-signature">
+                            <span class="k">def</span> <span class="nf">assign</span>(
+                            <span class="kw">x</span>: <span class="type">np.ndarray | torch.Tensor</span>, 
+                            <span class="kw">batch_size</span>: <span class="type">int</span> = <span class="mi">65536</span> ) &rarr; <span class="type">tuple[np.ndarray, np.ndarray]</span>
+                        </div>
+                        <p class="api-desc">Finds the nearest centroid for each vector in x.</p>
+                        <ul class="api-list">
+                            <li><strong>x</strong>: Query vectors of shape <code>[N, d]</code>.</li>
+                            <li><strong>batch_size</strong>: Chunk size for streaming batched processing to avoid out-of-memory errors on massive query sets.</li>
+                        </ul>
+                        <div class="api-returns">
+                            <strong>Returns:</strong> <code>(D, I)</code> where <code>D[i]</code> is the squared L2 distance (or cosine dist) to the nearest centroid, and <code>I[i]</code> is the index of that centroid. Return type matches input type (Tensor if input is Tensor, else ndarray).
+                        </div>
+                    </div>
+
+                    <div id="api-centroids" class="api-entity">
+                        <div class="api-signature">
+                            <span class="k">property</span> <span class="kw">centroids</span>: <span class="type">np.ndarray | None</span>
+                        </div>
+                        <p class="api-desc">Access the learned centroids. Shape is <code>[k, d]</code>. Set to <code>None</code> before <code>train()</code> is called. To get them as a PyTorch tensor, access the internal state or convert via <code>torch.from_numpy()</code>.</p>
+                    </div>
+                </section>
+
+                <hr class="section-divider">
+
+                <section id="benchmarks">
+                    <h2>Benchmarks</h2>
+                    <p>Performance comparison between native FAISS and TorchFAISS on PyTorch tensors. Tested on an NVIDIA A100 GPU.</p>
+                    
+                    <div class="benchmark-grid">
+                        <div class="benchmark-card">
+                            <h3>1× ImageNet (1.2M points)</h3>
+                            <p class="card-meta">d=128, k=1024</p>
+                            <table class="academic-table">
+                                <thead>
+                                    <tr>
+                                        <th>Library</th>
+                                        <th>Time (s)</th>
+                                        <th>Speedup</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>faiss.Kmeans</td>
+                                        <td>4.99s</td>
+                                        <td class="muted-col">1.0×</td>
+                                    </tr>
+                                    <tr class="highlight-row">
+                                        <td>TorchKmeans</td>
+                                        <td>1.15s</td>
+                                        <td><span class="accent-text">4.3×</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="benchmark-card">
+                            <h3>20× ImageNet (24M points)</h3>
+                            <p class="card-meta">d=128, k=1024</p>
+                            <table class="academic-table">
+                                <thead>
+                                    <tr>
+                                        <th>Library</th>
+                                        <th>Time (s)</th>
+                                        <th>Speedup</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>faiss.Kmeans</td>
+                                        <td>52.13s</td>
+                                        <td class="muted-col">1.0×</td>
+                                    </tr>
+                                    <tr class="highlight-row">
+                                        <td>TorchKmeans</td>
+                                        <td>9.69s</td>
+                                        <td><span class="accent-text">5.4×</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="admonition admonition-warning">
+                        <div class="admonition-title">Data Transfer Overhead</div>
+                        <p>The speedup primarily comes from eliminating the Host-to-Device and Device-to-Host transfers that occur when calling FAISS with PyTorch GPU tensors, as FAISS internally manages its own GPU memory.</p>
+                    </div>
+                </section>
+
+                <section id="philosophy">
+                    <h2>Design Philosophy</h2>
+                    <p>
+                        Machine learning engineering is shifting toward end-to-end PyTorch workflows. Tools like <code>xformers</code> and <code>flash-attention</code> demonstrate the power of native CUDA/PyTorch integration. TorchFAISS applies this philosophy to clustering:
+                    </p>
+                    <ul>
+                        <li><strong>No C++ extensions required:</strong> Uses highly optimized standard PyTorch ops (e.g. <code>torch.cdist</code>, <code>baddbmm</code>).</li>
+                        <li><strong>Distributed natively:</strong> Works out of the box with PyTorch's NCCL backend without complex MPI setups.</li>
+                        <li><strong>Zero-copy design:</strong> Avoids the costly <code>tensor.cpu().numpy()</code> and subsequent FAISS GPU reallocation cycles.</li>
+                    </ul>
+                </section>
+
+                <hr class="section-divider">
+
+                <section id="citation">
+                    <h2>Citation</h2>
+                    <p>If you use TorchFAISS in your research, please cite it using the following BibTeX entry:</p>
+                    <div class="code-block" data-lang="bibtex">
+                        <div class="code-header">
+                            <span class="dots"><i></i><i></i><i></i></span>
+                            <span class="lang-label">bibtex</span>
+                        </div>
+                        <pre><code><span class="k">@software</span>{anxiangsir_torchfaiss_2026,
+  <span class="kw">author</span> = {anxiangsir},
+  <span class="kw">title</span> = {TorchFAISS: Pure PyTorch Distributed KMeans with a FAISS-Compatible API},
+  <span class="kw">year</span> = {2026},
+  <span class="kw">url</span> = {https://github.com/anxiangsir/torchfaiss}
+}</code></pre>
+                    </div>
+                </section>
+                
+                <footer>
+                    <p>&copy; 2026 TorchFAISS Contributors. Released under the MIT License.</p>
+                </footer>
+            </article>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const sections = document.querySelectorAll('section[id], div[id^="api-"]');
+            const navLinks = document.querySelectorAll('.sidebar-nav a');
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        navLinks.forEach(link => {
+                            link.classList.remove('active');
+                            const href = link.getAttribute('href');
+                            if (href === '#' + entry.target.id) {
+                                link.classList.add('active');
+                                const parent = link.closest('.subnav');
+                                if (parent) {
+                                    parent.previousElementSibling.classList.add('active');
+                                }
+                            }
+                        });
+                    }
+                });
+            }, { rootMargin: '-20% 0px -80% 0px' });
+            
+            sections.forEach(sec => observer.observe(sec));
+        });
+    </script>
+</body>
 </html>
