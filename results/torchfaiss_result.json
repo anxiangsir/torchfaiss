@@ -2,13 +2,14 @@
   "method": "TorchFAISS Dist(8GPU)",
   "k": 1000,
   "niter": 20,
-  "train_time": 1.145,
-  "assign_train_time": 0.658,
-  "assign_val_time": 0.022,
-  "train_obj": 354192.84375,
-  "val_obj": 14031.8984375,
-  "train_nmi": 0.7526,
-  "train_purity": 0.533,
-  "val_nmi": 0.794,
-  "val_purity": 0.5333
+  "bf16": false,
+  "train_time": 1.028,
+  "assign_train_time": 0.644,
+  "assign_val_time": 0.027,
+  "train_obj": 354265.53125,
+  "val_obj": 14043.0654296875,
+  "train_nmi": 0.7508,
+  "train_purity": 0.5322,
+  "val_nmi": 0.7918,
+  "val_purity": 0.534
 }
