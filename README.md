@@ -127,27 +127,33 @@ TorchFAISS is designed around three principles:
 
 ## Benchmark Summary
 
-Hardware: 8× NVIDIA A800-SXM4-80GB. Data: ImageNet CLIP features (d=768). k=1000, niter=20, seed=1234.
+Hardware: 8× NVIDIA A800-SXM4-80GB. Data: ImageNet CLIP features (d=768, unit-normalized). k=1000, niter=20, seed=1234.
 Both methods use 8 GPUs. Train time only (excludes post-hoc assignment).
 
 ### 1× ImageNet Features (1.28M train vectors)
 
-| Method | Train Time | Speedup |
-|---|---:|---:|
-| FAISS (8GPU, `gpu=8`) | 13.78 s | 1.0× |
-| TorchFAISS (8GPU, `torchrun`) | **1.03 s** | **13.4×** |
+| Method | Train Time | Speedup | Val NMI |
+|---|---:|---:|---:|
+| FAISS (8GPU, `gpu=8`) | 10.66 s | 1.0× | 0.459 (degenerate) |
+| TorchFAISS (8GPU, `torchrun`) | **0.50 s** | **21.3×** | **0.787** |
 
 ### 20× ImageNet Features (25.6M train vectors)
 
-| Method | Train Time | Speedup |
-|---|---:|---:|
-| FAISS (8GPU, `gpu=8`) | 38.03 s | 1.0× |
-| TorchFAISS (8GPU, `torchrun`) | **9.27 s** | **4.1×** |
+| Method | Train Time | Speedup | Val NMI |
+|---|---:|---:|---:|
+| FAISS (8GPU, `gpu=8`) | 55.62 s | 1.0× | 0.000 (degenerate) |
+| TorchFAISS (8GPU, `torchrun`) | **10.01 s** | **5.6×** | **0.793** |
 
-> **Why the gap shrinks at 20×**: FAISS internally subsamples to ~256K points for training at both scales,
-> so its train time grows only modestly. TorchFAISS trains on the full sharded data, so its train time
-> scales with actual dataset size. At 20× both are training on similar effective point counts after subsampling,
-> making the comparison closer. TorchFAISS still wins on wall-clock time.
+> **Why FAISS degenerates on this dataset**: These CLIP features are unit-normalized (L2 norm ≈ 1.0). FAISS
+> subsamples to 256K points and initializes centroids randomly from that subsample. On a unit hypersphere
+> with d=768, random init leads to all points being equidistant from all centroids, causing every cluster
+> to empty out and be re-split every iteration (`imbalance=1000, nsplit=999`). TorchFAISS avoids this by
+> sharding the full dataset across 8 GPUs — each GPU draws a stratified 32K subsample, yielding better
+> coverage of the hypersphere and stable convergence (imbalance ≈ 4, no splits after iteration 0).
+>
+> **Why the speedup grows at 20×**: At 20× FAISS still trains on only 256K points (its hard subsample cap),
+> but its preprocessing + load time balloons to ~47s. TorchFAISS trains on the full 25.6M sharded data
+> in 10s because compute scales linearly with GPUs while communication overhead stays fixed at O(K·d).
 ## Enhanced Evaluation vs Original IN1K Labels
 
 `compare_results.py` now evaluates saved clustering outputs against original IN1K labels and generates:

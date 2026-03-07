@@ -3,13 +3,13 @@
   "k": 1000,
   "niter": 20,
   "bf16": false,
-  "train_time": 1.028,
-  "assign_train_time": 0.644,
-  "assign_val_time": 0.027,
-  "train_obj": 354265.53125,
-  "val_obj": 14043.0654296875,
-  "train_nmi": 0.7508,
-  "train_purity": 0.5322,
-  "val_nmi": 0.7918,
-  "val_purity": 0.534
+  "train_time": 0.501,
+  "assign_train_time": 0.585,
+  "assign_val_time": 0.021,
+  "train_obj": 355435.21875,
+  "val_obj": 14090.8212890625,
+  "train_nmi": 0.7459,
+  "train_purity": 0.5195,
+  "val_nmi": 0.7867,
+  "val_purity": 0.5184
 }

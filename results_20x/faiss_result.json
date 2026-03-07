@@ -1,16 +1,17 @@
 {
-  "method": "FAISS (GPU)",
+  "method": "FAISS (8GPU)",
   "k": 1000,
   "niter": 20,
+  "ngpu": 8,
   "n_train": 25623360,
   "n_val": 1000000,
-  "train_time": 52.129,
-  "assign_train_time": 8.986,
-  "assign_val_time": 0.116,
-  "train_obj": 7099109.5,
-  "val_obj": 281399.34375,
-  "train_nmi": 0.7504,
-  "train_purity": 0.5281,
-  "val_nmi": 0.7917,
-  "val_purity": 0.5296
+  "train_time": 55.619,
+  "assign_train_time": 5.535,
+  "assign_val_time": 0.092,
+  "train_obj": 38180656.0,
+  "val_obj": 1500388.375,
+  "train_nmi": 0.0003,
+  "train_purity": 0.001,
+  "val_nmi": 0.0003,
+  "val_purity": 0.001
 }

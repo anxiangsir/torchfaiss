@@ -297,7 +297,7 @@
 
                 <section id="benchmarks">
                     <h2>Benchmarks</h2>
-                    <p>Hardware: 8× NVIDIA A800-SXM4-80GB. Data: ImageNet CLIP features (d=768), k=1000, niter=20. Train time only.</p>
+                    <p>Hardware: 8× NVIDIA A800-SXM4-80GB. Data: ImageNet CLIP features (d=768, unit-normalized), k=1000, niter=20. Train time only.</p>
                     
                     <div class="benchmark-grid">
                         <div class="benchmark-card">
@@ -310,20 +310,23 @@
                                         <th>GPUs</th>
                                         <th>Time (s)</th>
                                         <th>Speedup</th>
+                                        <th>Val NMI</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td>FAISS</td>
                                         <td>8</td>
-                                        <td class="muted-col">13.78 s</td>
+                                        <td class="muted-col">10.66 s</td>
                                         <td class="muted-col">1.0×</td>
+                                        <td class="muted-col">0.459 ⚠️</td>
                                     </tr>
                                     <tr class="highlight-row">
                                         <td>TorchKmeans</td>
                                         <td>8</td>
-                                        <td>1.03 s</td>
-                                        <td><span class="accent-text">13.4×</span></td>
+                                        <td>0.50 s</td>
+                                        <td><span class="accent-text">21.3×</span></td>
+                                        <td><span class="accent-text">0.787</span></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -339,20 +342,23 @@
                                         <th>GPUs</th>
                                         <th>Time (s)</th>
                                         <th>Speedup</th>
+                                        <th>Val NMI</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td>FAISS</td>
                                         <td>8</td>
-                                        <td class="muted-col">38.03 s</td>
+                                        <td class="muted-col">55.62 s</td>
                                         <td class="muted-col">1.0×</td>
+                                        <td class="muted-col">0.000 ⚠️</td>
                                     </tr>
                                     <tr class="highlight-row">
                                         <td>TorchKmeans</td>
                                         <td>8</td>
-                                        <td>9.27 s</td>
-                                        <td><span class="accent-text">4.1×</span></td>
+                                        <td>10.01 s</td>
+                                        <td><span class="accent-text">5.6×</span></td>
+                                        <td><span class="accent-text">0.793</span></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -360,9 +366,9 @@
                     </div>
                     <div class="admonition admonition-note">
                         <div class="admonition-title">Benchmark Methodology</div>
-                        <p>Both methods run on 8 GPUs with identical data (ImageNet CLIP features, d=768), k=1000, niter=20, seed=1234.
+                        <p>Both methods run on 8 GPUs with identical data (ImageNet CLIP features, d=768, unit-normalized), k=1000, niter=20, seed=1234.
                         FAISS uses <code>faiss.Kmeans(gpu=8)</code>; TorchFAISS uses <code>torchrun --nproc_per_node=8</code> with data-parallel Lloyd iterations.
-                        TorchFAISS shards data across GPUs; FAISS replicates the index to all GPUs. These are architecturally different parallelism strategies.</p>
+                        TorchFAISS shards data across GPUs; FAISS replicates the index to all GPUs. Note: FAISS produces degenerate clustering on unit-normalized features (imbalance=1000 every iter, Val NMI≈0.46) due to its random 256K subsample init; TorchFAISS converges stably (Val NMI=0.79).</p>
                     </div>
                 </section>
 
