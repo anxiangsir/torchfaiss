@@ -1,0 +1,44 @@
+<svg width="1200" height="360" viewBox="0 0 1200 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1020"/>
+      <stop offset="1" stop-color="#151A2E"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="170" y1="70" x2="350" y2="290" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7DD3FC"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="txt" x1="430" y1="100" x2="930" y2="250" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#CBD5E1"/>
+    </linearGradient>
+    <filter id="soft" x="0" y="0" width="1200" height="360" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+
+  <g filter="url(#soft)" opacity="0.38">
+    <circle cx="210" cy="180" r="122" fill="#38BDF8"/>
+    <circle cx="990" cy="58" r="92" fill="#2563EB"/>
+  </g>
+
+  <g>
+    <circle cx="220" cy="180" r="98" fill="url(#glow)"/>
+    <circle cx="220" cy="180" r="66" fill="#0F172A" stroke="#93C5FD" stroke-width="4"/>
+    <circle cx="220" cy="180" r="34" fill="#38BDF8"/>
+
+    <path d="M220 82V278" stroke="#93C5FD" stroke-opacity="0.72" stroke-width="3" stroke-dasharray="8 10"/>
+    <path d="M122 180H318" stroke="#93C5FD" stroke-opacity="0.72" stroke-width="3" stroke-dasharray="8 10"/>
+    <path d="M151 111L289 249" stroke="#93C5FD" stroke-opacity="0.52" stroke-width="2.8" stroke-dasharray="6 10"/>
+    <path d="M289 111L151 249" stroke="#93C5FD" stroke-opacity="0.52" stroke-width="2.8" stroke-dasharray="6 10"/>
+  </g>
+
+  <g fill="url(#txt)" font-family="Inter, Segoe UI, Roboto, Arial, sans-serif">
+    <text x="400" y="170" font-size="84" font-weight="800" letter-spacing="1">TorchFAISS</text>
+    <text x="404" y="224" font-size="30" font-weight="500" fill="#93C5FD">
+      Distributed KMeans in Pure PyTorch
+    </text>
+  </g>
+</svg>

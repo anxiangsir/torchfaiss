@@ -1,5 +1,9 @@
 # TorchFAISS
 
+<p align="center">
+  <img src="assets/logo.svg" alt="TorchFAISS logo" width="900"/>
+</p>
+
 Pure PyTorch distributed KMeans implementation with a FAISS-compatible API (`train` / `assign` / `centroids`) and multi-GPU / multi-node training via `torch.distributed`.
 
 ## Features
