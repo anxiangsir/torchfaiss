@@ -220,7 +220,7 @@ class TorchKmeans:
         return centroids
 
     def _assign_batch(
-        self, x: torch.Tensor, centroids: torch.Tensor, batch_size: int = 65536
+        self, x: torch.Tensor, centroids: torch.Tensor, batch_size: int = 131072
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Assign each point to nearest centroid using batched matrix ops.
@@ -317,49 +317,51 @@ class TorchKmeans:
 
         self._log(f"  Preprocessing in {time.time() - t0:.2f} s")
 
+        # Precompute total_n once (used for imbalance logging)
+        local_n = torch.tensor([x.shape[0]], device=self.device, dtype=torch.long)
+        if self.distributed:
+            dist.all_reduce(local_n, op=dist.ReduceOp.SUM)
+        total_n = local_n.item()
+
+        D: Optional[torch.Tensor] = None
+        assign_idx: Optional[torch.Tensor] = None
+        obj = float('inf')
+
         for it in range(self.niter):
             # E-step: assign
             t_search = time.time()
             D, assign_idx = self._assign_batch(x, centroids)
             search_time = time.time() - t_search
 
-            # Compute objective (total distance)
+            # Compute objective — reuse assign from this step
             local_obj = D.sum()
             if self.distributed:
                 dist.all_reduce(local_obj, op=dist.ReduceOp.SUM)
             obj = local_obj.item()
 
-            # Compute imbalance factor: max_count / (N/k)
-            local_n = torch.tensor([x.shape[0]], device=self.device, dtype=torch.long)
-            if self.distributed:
-                dist.all_reduce(local_n, op=dist.ReduceOp.SUM)
-            total_n = local_n.item()
+            # M-step: update centroids (returns counts for imbalance logging)
+            if not self.frozen_centroids:
+                centroids, counts, n_split = self._update_centroids(x, assign_idx, centroids)
+            else:
+                counts = torch.zeros(self.k, device=self.device, dtype=torch.long)
+                counts.scatter_add_(0, assign_idx, torch.ones_like(assign_idx))
+                if self.distributed:
+                    dist.all_reduce(counts, op=dist.ReduceOp.SUM)
+                n_split = 0
 
-            counts = torch.zeros(self.k, device=self.device, dtype=torch.long)
-            counts.scatter_add_(0, assign_idx, torch.ones_like(assign_idx))
-            if self.distributed:
-                dist.all_reduce(counts, op=dist.ReduceOp.SUM)
-            
             max_count = counts.max().item()
             ideal_count = total_n / self.k
             imbalance = max_count / ideal_count if ideal_count > 0 else 0.0
 
-            # M-step: update centroids
-            if not self.frozen_centroids:
-                centroids, _, n_split = self._update_centroids(x, assign_idx, centroids)
-            else:
-                n_split = 0
-
             total_time = time.time() - t0
-
             self._log(
                 f"  Iteration {it} ({total_time:.2f} s, search {search_time:.2f} s): "
                 f"objective={obj:.0f} imbalance={imbalance:.3f} nsplit={n_split}"
             )
 
-        # Final objective
-        D_final, _ = self._assign_batch(x, centroids)
-        local_obj = D_final.sum()
+        # Final objective: use last iteration's D (no extra assign pass needed)
+        assert D is not None
+        local_obj = D.sum()
         if self.distributed:
             dist.all_reduce(local_obj, op=dist.ReduceOp.SUM)
         final_obj = local_obj.item()

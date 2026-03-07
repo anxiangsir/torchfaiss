@@ -1,10 +1,10 @@
 """
-Benchmark: FAISS KMeans (GPU) on ImageNet CLIP features.
+Benchmark: FAISS KMeans (multi-GPU) on ImageNet CLIP features.
 
-This runs as a single process — no torch.distributed.
+Runs as a single process with FAISS multi-GPU support (gpu=N).
 
 Usage:
-    python benchmark_faiss.py
+    python benchmark_faiss.py --ngpu 8
 
 Saves results to results/faiss_result.npz for comparison.
 """
@@ -41,12 +41,15 @@ def main():
     parser.add_argument("--k", type=int, default=1000)
     parser.add_argument("--niter", type=int, default=20)
     parser.add_argument("--seed", type=int, default=1234)
-    parser.add_argument("--gpu", action="store_true", default=True)
+    parser.add_argument("--ngpu", type=int, default=8,
+                        help="Number of GPUs to use (default: 8, same as TorchFAISS for fair comparison)")
     args = parser.parse_args()
 
     import faiss
     print(f"FAISS version: {faiss.__version__}")
     print(f"FAISS GPU count: {faiss.get_num_gpus()}")
+    ngpu = min(args.ngpu, faiss.get_num_gpus())
+    print(f"Using {ngpu} GPU(s)")
 
     # Load features
     train_features = np.load(os.path.join(args.feature_dir, "train_features.npy"))
@@ -58,7 +61,7 @@ def main():
     print("FAISS KMeans Benchmark")
     print("=" * 80)
     print(f"Train: {train_features.shape}, Val: {val_features.shape}")
-    print(f"K={args.k}, niter={args.niter}, gpu={args.gpu}")
+    print(f"K={args.k}, niter={args.niter}, ngpu={ngpu}")
     print("=" * 80)
 
     d = train_features.shape[1]
@@ -66,7 +69,7 @@ def main():
         d, args.k,
         niter=args.niter,
         verbose=True,
-        gpu=args.gpu,
+        gpu=ngpu,
         seed=args.seed,
     )
 
@@ -92,7 +95,7 @@ def main():
     nmi_val, purity_val = compute_metrics(val_labels, I_val)
 
     print("\n" + "=" * 80)
-    print(f"RESULTS: FAISS KMeans ({'GPU' if args.gpu else 'CPU'})")
+    print(f"RESULTS: FAISS KMeans ({ngpu} GPU)")
     print("=" * 80)
     print(f"  Train time:     {train_time:.2f} s")
     print(f"  Assign time:    {assign_train_time:.2f} s (train), {assign_val_time:.2f} s (val)")
@@ -116,8 +119,9 @@ def main():
         val_distances=D_val,
     )
     result_json = {
-        "method": f"FAISS ({'GPU' if args.gpu else 'CPU'})",
+        "method": f"FAISS ({ngpu}GPU)",
         "k": args.k, "niter": args.niter,
+        "ngpu": ngpu,
         "train_time": round(train_time, 3),
         "assign_train_time": round(assign_train_time, 3),
         "assign_val_time": round(assign_val_time, 3),

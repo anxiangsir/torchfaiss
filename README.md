@@ -88,14 +88,16 @@ km = TorchKmeans(d=768, k=1000, niter=20, distributed=True, bf16=True)
 
 ## Why TorchFAISS Is Faster Than FAISS Here
 
-For this benchmark setup, the speedup comes mainly from **data parallelism over training points** in Lloyd iterations:
+TorchFAISS uses distributed data parallelism: each of N GPUs processes 1/N of the data per Lloyd iteration,
+communicating only centroid statistics (O(K·d)) instead of all data. This is fundamentally different from
+FAISS multi-GPU, which replicates the full dataset onto every GPU and shards only the index queries.
 
 1. **Assignment/update compute is split across GPUs**. Each rank handles ~N/world_size samples, so most O(N·K·d) work scales with GPU count.
 2. **Per-iteration communication is relatively small**. Synchronization is over centroid statistics (roughly O(K·d)), while local distance compute stays O(N·K·d); as N grows, compute dominates and communication overhead is amortized.
-3. **Better scaling at larger N**. In this repo’s results, speedup rises from **4.3× (1× data)** to **5.4× (20× data)**, which is consistent with distributed overhead becoming less significant at larger dataset sizes.
+3. **Better scaling at larger N**. Speedup rises with dataset size, consistent with communication overhead becoming less significant.
 4. **Where speedup is not guaranteed**: for small datasets or communication-heavy settings, distributed overhead can offset gains.
 
-In short: the benchmark is compute-heavy enough that splitting samples across GPUs yields substantial training-time gains while maintaining similar clustering quality.
+In short: data-parallel sharding fundamentally differs from FAISS's replicated multi-GPU approach — and this difference is what drives speedup at scale.
 
 ## TorchFAISS Design Philosophy
 
@@ -127,17 +129,22 @@ TorchFAISS is designed around three principles:
 
 ### 1× ImageNet Features
 
-| Method | Train Time | Speedup vs FAISS |
+> **Note**: Previously benchmarked against FAISS 1-GPU only. Re-running with FAISS 8-GPU for a fair comparison.
+> Numbers below will be updated after the fair re-run.
+
+| Method | Train Time | Speedup vs FAISS 8GPU |
 |---|---:|---:|
-| FAISS (GPU) | 4.99 s | 1.0× |
-| TorchFAISS (8GPU) | 1.15 s | 4.3× |
+| FAISS (8GPU) | TBD | 1.0× |
+| TorchFAISS (8GPU) | TBD | TBD |
 
 ### 20× ImageNet Features
 
-| Method | Train Time | Speedup vs FAISS |
+| Method | Train Time | Speedup vs FAISS 8GPU |
 |---|---:|---:|
-| FAISS (GPU) | 52.13 s | 1.0× |
-| TorchFAISS (8GPU) | 9.69 s | 5.4× |
+| FAISS (8GPU) | TBD | 1.0× |
+| TorchFAISS (8GPU) | TBD | TBD |
+
+> Previous numbers (FAISS 1-GPU baseline, not apples-to-apples): 4.3× (1×), 5.4× (20×).
 
 ## Enhanced Evaluation vs Original IN1K Labels
 

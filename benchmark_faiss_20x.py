@@ -1,10 +1,10 @@
 """
-Benchmark: FAISS KMeans (GPU) on 20x ImageNet CLIP features.
+Benchmark: FAISS KMeans (multi-GPU) on 20x ImageNet CLIP features.
 
-Single process, uses all GPUs via FAISS's multi-GPU support.
+Single process, uses FAISS multi-GPU support (gpu=N).
 
 Usage:
-    python benchmark_faiss_20x.py
+    python benchmark_faiss_20x.py --ngpu 8
 """
 
 import os
@@ -39,12 +39,15 @@ def main():
     parser.add_argument("--k", type=int, default=1000)
     parser.add_argument("--niter", type=int, default=20)
     parser.add_argument("--seed", type=int, default=1234)
-    parser.add_argument("--gpu", action="store_true", default=True)
+    parser.add_argument("--ngpu", type=int, default=8,
+                        help="Number of GPUs to use (default: 8, same as TorchFAISS for fair comparison)")
     args = parser.parse_args()
 
     import faiss
     print(f"FAISS version: {faiss.__version__}")
     print(f"FAISS GPU count: {faiss.get_num_gpus()}")
+    ngpu = min(args.ngpu, faiss.get_num_gpus())
+    print(f"Using {ngpu} GPU(s)")
 
     # Memory-map train features
     train_features = np.load(os.path.join(args.feature_dir, "train_features.npy"), mmap_mode="r")
@@ -54,14 +57,14 @@ def main():
     print("FAISS KMeans Benchmark (20x)")
     print("=" * 80)
     print(f"Train: {train_features.shape}")
-    print(f"K={args.k}, niter={args.niter}, gpu={args.gpu}")
+    print(f"K={args.k}, niter={args.niter}, ngpu={ngpu}")
     print("=" * 80)
 
     km = faiss.Kmeans(
         d, args.k,
         niter=args.niter,
         verbose=True,
-        gpu=args.gpu,
+        gpu=ngpu,
         seed=args.seed,
     )
 
@@ -75,9 +78,6 @@ def main():
     t0 = time.time()
     km.train(train_features_ram)
     train_time = time.time() - t0
-
-    # Build index for assignment (FAISS uses an internal index)
-    # km.index is already built after training
 
     # Assign train set in chunks (25M vectors can't fit in GPU at once)
     print(f"\nAssigning train set ({n_train:,} vectors) ...")
@@ -114,7 +114,7 @@ def main():
     nmi_val, purity_val = compute_metrics(val_labels, I_val)
 
     print("\n" + "=" * 80)
-    print(f"RESULTS: FAISS KMeans ({'GPU' if args.gpu else 'CPU'}) — 20x Data")
+    print(f"RESULTS: FAISS KMeans ({ngpu} GPU) — 20x Data")
     print("=" * 80)
     print(f"  Train vectors:  {n_train:,}")
     print(f"  Val vectors:    {val_features.shape[0]:,}")
@@ -140,8 +140,9 @@ def main():
         val_distances=D_val,
     )
     result_json = {
-        "method": f"FAISS ({'GPU' if args.gpu else 'CPU'})",
+        "method": f"FAISS ({ngpu}GPU)",
         "k": args.k, "niter": args.niter,
+        "ngpu": ngpu,
         "n_train": int(n_train),
         "n_val": int(val_features.shape[0]),
         "train_time": round(train_time, 3),
