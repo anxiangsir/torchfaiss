@@ -220,3 +220,16 @@ torchfaiss/
 ├── requirements.txt
 └── README.md
 ```
+
+## Citation
+
+If you use this project in academic work, please cite:
+
+```bibtex
+@software{anxiangsir_torchfaiss_2026,
+  author  = {anxiangsir},
+  title   = {TorchFAISS: Pure PyTorch Distributed KMeans with a FAISS-Compatible API},
+  year    = {2026},
+  url     = {https://github.com/anxiangsir/torchfaiss}
+}
+```
