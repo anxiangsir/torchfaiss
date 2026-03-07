@@ -142,5 +142,6 @@
     "val_nmi_diff": 0.0002057726910371649,
     "training_speedup": 5.380780346820809
   },
-  "speed_plot": "evaluation_reports/speed_comparison.png"
+  "speed_plot": "evaluation_reports/speed_comparison.png",
+  "curve_comparison_plot": "evaluation_reports/curve_comparison.png"
 }

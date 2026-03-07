@@ -76,6 +76,106 @@ def plot_speed_comparison(report_root: str, runtime_results: List[Dict[str, Any]
     return out_path
 
 
+def plot_curve_comparison(
+    report_root: str,
+    report_manifest: Dict[str, Dict[str, Any]],
+    result_dir: str,
+) -> str:
+    fig, axes = plt.subplots(2, 2, figsize=(13, 9.2))
+
+    color_cycle = ["#4c72b0", "#dd8452", "#55a868", "#c44e52"]
+    roc_micro_fprs: List[np.ndarray] = []
+    roc_micro_tprs: List[np.ndarray] = []
+    pr_micro_recalls: List[np.ndarray] = []
+    pr_micro_precisions: List[np.ndarray] = []
+    for idx, (method_name, payload) in enumerate(report_manifest.items()):
+        curve_rel = payload["artifacts"]["curve_json"]
+        curve_path = os.path.join(result_dir, curve_rel)
+        with open(curve_path) as handle:
+            curve_data = json.load(handle)
+
+        roc = curve_data["roc"]
+        pr = curve_data["pr"]
+        color = color_cycle[idx % len(color_cycle)]
+
+        roc_fpr = np.asarray(roc["micro_fpr"], dtype=np.float64)
+        roc_tpr = np.asarray(roc["micro_tpr"], dtype=np.float64)
+        pr_recall = np.asarray(pr["micro_recall"], dtype=np.float64)
+        pr_precision = np.asarray(pr["micro_precision"], dtype=np.float64)
+        roc_micro_fprs.append(roc_fpr)
+        roc_micro_tprs.append(roc_tpr)
+        pr_micro_recalls.append(pr_recall)
+        pr_micro_precisions.append(pr_precision)
+
+        axes[0, 0].plot(
+            roc["micro_fpr"],
+            roc["micro_tpr"],
+            color=color,
+            linewidth=2,
+            label=f"{method_name} (AUC={roc['micro_auc']:.4f})",
+        )
+        axes[0, 1].plot(
+            pr["micro_recall"],
+            pr["micro_precision"],
+            color=color,
+            linewidth=2,
+            label=f"{method_name} (AP={pr['micro_ap']:.4f})",
+        )
+
+    axes[0, 0].plot([0, 1], [0, 1], color="gray", linestyle=":", linewidth=1)
+    axes[0, 0].set_title("Micro ROC (full range)")
+    axes[0, 0].set_xlabel("False Positive Rate")
+    axes[0, 0].set_ylabel("True Positive Rate")
+    axes[0, 0].grid(alpha=0.25, linestyle=":")
+    axes[0, 0].legend(fontsize=8)
+
+    axes[0, 1].set_title("Micro PR (full range)")
+    axes[0, 1].set_xlabel("Recall")
+    axes[0, 1].set_ylabel("Precision")
+    axes[0, 1].grid(alpha=0.25, linestyle=":")
+    axes[0, 1].legend(fontsize=8)
+
+    for idx, method_name in enumerate(report_manifest.keys()):
+        color = color_cycle[idx % len(color_cycle)]
+        axes[1, 0].plot(
+            roc_micro_fprs[idx],
+            roc_micro_tprs[idx],
+            color=color,
+            linewidth=2,
+            label=method_name,
+        )
+        axes[1, 1].plot(
+            pr_micro_recalls[idx],
+            pr_micro_precisions[idx],
+            color=color,
+            linewidth=2,
+            label=method_name,
+        )
+
+    axes[1, 0].set_title("Micro ROC (zoomed: FPR 0~0.10)")
+    axes[1, 0].set_xlabel("False Positive Rate")
+    axes[1, 0].set_ylabel("True Positive Rate")
+    axes[1, 0].set_xlim(0.0, 0.10)
+    axes[1, 0].set_ylim(0.85, 1.0)
+    axes[1, 0].grid(alpha=0.3, linestyle=":")
+    axes[1, 0].legend(fontsize=8)
+
+    axes[1, 1].set_title("Micro PR (zoomed: Recall 0.80~1.00)")
+    axes[1, 1].set_xlabel("Recall")
+    axes[1, 1].set_ylabel("Precision")
+    axes[1, 1].set_xlim(0.80, 1.0)
+    axes[1, 1].set_ylim(0.0, 0.7)
+    axes[1, 1].grid(alpha=0.3, linestyle=":")
+    axes[1, 1].legend(fontsize=8)
+
+    fig.suptitle("FAISS vs TorchFAISS Curve Comparison (with zoomed views)")
+    fig.tight_layout()
+    out_path = os.path.join(report_root, "curve_comparison.png")
+    fig.savefig(out_path, dpi=220)
+    plt.close(fig)
+    return out_path
+
+
 def print_runtime_table(runtime_results: List[Dict[str, Any]]) -> None:
     print(f"\n{'=' * 132}")
     print("  KMeans Benchmark Comparison: TorchFAISS vs FAISS")
@@ -210,6 +310,7 @@ def main() -> None:
     print_runtime_table(runtime_results)
     cross_method = summarize_cross_method(result_dir, runtime_results)
     speed_plot_path = plot_speed_comparison(report_root, runtime_results)
+    curve_plot_path = plot_curve_comparison(report_root, report_manifest, result_dir)
     manifest_path = os.path.join(report_root, "summary.json")
     with open(manifest_path, "w") as handle:
         json.dump(
@@ -220,6 +321,7 @@ def main() -> None:
                 "methods": report_manifest,
                 "cross_method": cross_method,
                 "speed_plot": os.path.relpath(speed_plot_path, result_dir),
+                "curve_comparison_plot": os.path.relpath(curve_plot_path, result_dir),
             },
             handle,
             indent=2,

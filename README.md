@@ -104,6 +104,18 @@ Artifacts are saved under:
 
 ![20x Speed Comparison](results_20x/evaluation_reports/speed_comparison.png)
 
+### Unified FAISS vs TorchFAISS Curve Comparison (same figure)
+
+The comparison image now includes both **full-range** and **zoomed** panels (low-FPR ROC and high-recall PR) so small quality gaps are easier to see.
+
+1× dataset:
+
+![1x Curve Comparison](results/evaluation_reports/curve_comparison.png)
+
+20× dataset:
+
+![20x Curve Comparison](results_20x/evaluation_reports/curve_comparison.png)
+
 ### Example Figures
 
 1× dataset (TorchFAISS):
