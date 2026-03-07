@@ -581,11 +581,44 @@ footer {
 }
 
 /* Responsive */
+
+/* Sidebar overlay for mobile */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    z-index: 99;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.sidebar-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
 @media (max-width: 768px) {
+    html {
+        scroll-padding-top: 4.5rem; /* account for sticky mobile header */
+    }
+
+    body {
+        font-size: 0.97rem;
+    }
+
+    h1 { font-size: 1.9rem; }
+    h2 { font-size: 1.45rem; }
+    h3 { font-size: 1.15rem; }
+
     .sidebar {
         transform: translateX(-100%);
+        top: 0;
+        left: 0;
+        width: min(var(--sidebar-width), 85vw);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.5);
     }
-    
+
     .sidebar.active {
         transform: translateX(0);
     }
@@ -599,15 +632,99 @@ footer {
         display: flex;
     }
 
-    .hero-title {
-        font-size: 2.5rem;
+    /* Hero */
+    .hero {
+        padding: 2.5rem 0 1.5rem;
     }
-    
+    .hero-title {
+        font-size: 2.2rem;
+    }
+    .hero-tagline {
+        font-size: 1rem;
+    }
+    .badges {
+        gap: 8px;
+    }
+    .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.6rem;
+    }
+
+    /* Code blocks */
+    .code-block pre {
+        padding: 1rem 0.85rem;
+    }
+    .code-block code {
+        font-size: 0.8rem;
+    }
+    /* Hide the pseudo copy button on mobile (no hover) */
+    .code-block::after {
+        display: none;
+    }
+
+    /* API entities */
+    .api-entity {
+        padding: 1rem 0.9rem;
+        border-radius: 0 6px 6px 0;
+    }
+    .api-signature {
+        font-size: 0.85rem;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: pre-wrap;
+    }
+
+    /* Parameter table → stack as cards on very narrow screens */
+    .academic-table thead {
+        display: none;
+    }
+    .academic-table,
+    .academic-table tbody,
+    .academic-table tr,
+    .academic-table td {
+        display: block;
+        width: 100%;
+    }
+    .academic-table tr {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        margin-bottom: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        background: rgba(255,255,255,0.02);
+    }
+    .academic-table td {
+        padding: 0.3rem 0;
+        border-bottom: none;
+        font-size: 0.88rem;
+    }
+    .academic-table td:first-child {
+        font-weight: 600;
+        color: var(--accent-cyan);
+        margin-bottom: 0.2rem;
+    }
+    /* Re-add data labels via CSS attr hack */
+    .academic-table td::before {
+        display: none;
+    }
+
+    /* Benchmark grid */
     .benchmark-grid {
         grid-template-columns: 1fr;
     }
-    
-    .api-entity {
+    .benchmark-card {
         padding: 1rem;
+    }
+
+    /* Admonitions */
+    .admonition {
+        padding: 0.9rem 1rem;
+    }
+
+    /* Sections */
+    .section-divider {
+        margin: 2.5rem 0;
+    }
+    section {
+        margin-top: 0;
     }
 }

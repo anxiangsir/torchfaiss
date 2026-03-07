@@ -49,7 +49,7 @@
         <main class="content">
             <header class="mobile-header">
                 <div class="mobile-logo">TorchFAISS</div>
-                <button class="menu-toggle" aria-label="Toggle Menu" onclick="document.querySelector('.sidebar').classList.toggle('active')">☰</button>
+                <button class="menu-toggle" aria-label="Toggle Menu" id="menu-toggle">☰</button>
             </header>
 
             <section id="hero" class="hero">
@@ -396,11 +396,39 @@
         </main>
     </div>
 
-    <script>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
         document.addEventListener('DOMContentLoaded', () => {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            const toggle = document.getElementById('menu-toggle');
+
+            function openSidebar() {
+                sidebar.classList.add('active');
+                overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+            function closeSidebar() {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+
+            toggle.addEventListener('click', () => {
+                sidebar.classList.contains('active') ? closeSidebar() : openSidebar();
+            });
+            overlay.addEventListener('click', closeSidebar);
+
+            // Close sidebar on nav link click (mobile)
+            document.querySelectorAll('.sidebar-nav a').forEach(link => {
+                link.addEventListener('click', () => {
+                    if (window.innerWidth <= 768) closeSidebar();
+                });
+            });
+
+            // Active section highlight
             const sections = document.querySelectorAll('section[id], div[id^="api-"]');
             const navLinks = document.querySelectorAll('.sidebar-nav a');
-            
+
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
@@ -418,7 +446,7 @@
                     }
                 });
             }, { rootMargin: '-20% 0px -80% 0px' });
-            
+
             sections.forEach(sec => observer.observe(sec));
         });
     </script>
