@@ -86,6 +86,22 @@ km = TorchKmeans(d=768, k=1000, niter=20, distributed=True, bf16=True)
 
 `bf16=True` uses BF16 for the distance matmul hot path and keeps accumulations/objective in FP32 for stability.
 
+Triton compile path + optional INT8 assignment (both optional):
+
+```python
+km = TorchKmeans(
+    d=768,
+    k=1000,
+    niter=20,
+    distributed=True,
+    use_triton=True,
+    int8_assign=True,
+)
+```
+
+- `use_triton=True`: enables a Triton-backed `torch.compile` distance path on CUDA when Triton is available.
+- `int8_assign=True`: enables optional INT8 assignment matmul path (falls back automatically when unsupported).
+
 ## Why TorchFAISS Is Faster Than FAISS Here
 
 TorchFAISS uses distributed data parallelism: each of N GPUs processes 1/N of the data per Lloyd iteration,
@@ -123,6 +139,8 @@ TorchFAISS is designed around three principles:
 - **Streaming assignment for large datasets**: chunk-based assignment on full train/val for 20× scale.
 - **Empty-cluster repair strategy**: split-largest-cluster style fallback to keep K fixed and training stable.
 - **Optional BF16 hot-path acceleration**: faster centroid-distance matmul when hardware supports BF16.
+- **Optional Triton compile acceleration**: enables compiled distance path on CUDA.
+- **Optional INT8 assignment acceleration**: INT8 GEMM-based assignment path with safe runtime fallback.
 - **Portable path defaults**: scripts default to repo-relative paths for reproducibility across machines.
 
 ## Benchmark Summary
@@ -143,6 +161,24 @@ Both methods use 8 GPUs. Train time only (excludes post-hoc assignment).
 |---|---:|---:|---:|
 | FAISS (8GPU, `gpu=8`) | 55.62 s | 1.0× | 0.000 (degenerate) |
 | TorchFAISS (8GPU, `torchrun`) | **10.01 s** | **5.6×** | **0.793** |
+
+### 20× TorchFAISS Ablation (No Triton): FP32 vs INT8 Assign
+
+Measured with:
+
+- `torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_fp32_notriton`
+- `torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_int8_notriton --int8_assign`
+
+| TorchFAISS Mode | Train Time | Assign Time (Train) | Assign Time (Val) | Val NMI | Val Purity | Assign Peak Mem |
+|---|---:|---:|---:|---:|---:|---:|
+| FP32 (no Triton) | **6.96 s** | 167.78 s | **0.53 s** | 0.7890 | 0.5251 | **1204.1 MB** |
+| INT8 Assign (no Triton) | 8.99 s | **68.58 s** | 0.62 s | **0.7917** | **0.5265** | 1252.8 MB |
+
+Observed trade-off on 20×:
+
+- INT8 assign significantly accelerates full-train assignment (~59% faster)
+- INT8 training pass is slower in this setup (~29% slower)
+- Validation clustering quality remains close (slightly higher NMI/purity in this run)
 
 > **Why FAISS degenerates on this dataset**: These CLIP features are unit-normalized (L2 norm ≈ 1.0). FAISS
 > subsamples to 256K points and initializes centroids randomly from that subsample. On a unit hypersphere
@@ -213,6 +249,17 @@ torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --resu
 # optional BF16 speed mode
 torchrun --nproc_per_node=8 benchmark.py --feature_dir ./features --result_dir ./results --bf16
 torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x --bf16
+
+# optional Triton + INT8 assignment mode
+torchrun --nproc_per_node=8 benchmark.py --feature_dir ./features --result_dir ./results --use_triton --int8_assign
+torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x --use_triton --int8_assign
+
+# 20x no-triton ablation (FP32 vs INT8 assign)
+torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_fp32_notriton
+torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_int8_notriton --int8_assign
+
+# precision/speed/memory comparison across modes (single GPU)
+python benchmark_precision_modes.py --feature_dir ./features --output ./results/precision_modes.json
 
 # 4) FAISS benchmarks (run in env with faiss installed)
 python benchmark_faiss.py --ngpu 8 --feature_dir ./features --result_dir ./results

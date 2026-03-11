@@ -49,7 +49,7 @@
         <main class="content">
             <header class="mobile-header">
                 <div class="mobile-logo">TorchFAISS</div>
-                <button class="menu-toggle" aria-label="Toggle Menu" id="menu-toggle">☰</button>
+                <button type="button" class="menu-toggle" aria-label="Toggle Menu" id="menu-toggle">☰</button>
             </header>
 
             <section id="hero" class="hero">
@@ -364,11 +364,48 @@
                             </table>
                         </div>
                     </div>
+                    <div class="benchmark-card" style="margin-top: 1.2rem;">
+                        <h3>20× TorchFAISS Ablation (No Triton): FP32 vs INT8 Assign</h3>
+                        <p class="card-meta">8 GPUs, d=768 (CLIP), k=1000, niter=20</p>
+                        <table class="academic-table">
+                            <thead>
+                                <tr>
+                                    <th>Mode</th>
+                                    <th>Train (s)</th>
+                                    <th>Assign-Train (s)</th>
+                                    <th>Assign-Val (s)</th>
+                                    <th>Val NMI</th>
+                                    <th>Val Purity</th>
+                                    <th>Assign Peak Mem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>FP32 (no Triton)</td>
+                                    <td><span class="accent-text">6.96</span></td>
+                                    <td class="muted-col">167.78</td>
+                                    <td><span class="accent-text">0.53</span></td>
+                                    <td class="muted-col">0.7890</td>
+                                    <td class="muted-col">0.5251</td>
+                                    <td><span class="accent-text">1204.1 MB</span></td>
+                                </tr>
+                                <tr class="highlight-row">
+                                    <td>INT8 Assign (no Triton)</td>
+                                    <td class="muted-col">8.99</td>
+                                    <td><span class="accent-text">68.58</span></td>
+                                    <td class="muted-col">0.62</td>
+                                    <td><span class="accent-text">0.7917</span></td>
+                                    <td><span class="accent-text">0.5265</span></td>
+                                    <td class="muted-col">1252.8 MB</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <div class="admonition admonition-note">
                         <div class="admonition-title">Benchmark Methodology</div>
                         <p>Both methods run on 8 GPUs with identical data (ImageNet CLIP features, d=768, unit-normalized), k=1000, niter=20, seed=1234.
                         FAISS uses <code>faiss.Kmeans(gpu=8)</code>; TorchFAISS uses <code>torchrun --nproc_per_node=8</code> with data-parallel Lloyd iterations.
-                        TorchFAISS shards data across GPUs; FAISS replicates the index to all GPUs. Note: FAISS produces degenerate clustering on unit-normalized features (imbalance=1000 every iter, Val NMI≈0.46) due to its random 256K subsample init; TorchFAISS converges stably (Val NMI=0.79).</p>
+                        TorchFAISS shards data across GPUs; FAISS replicates the index to all GPUs. Note: FAISS produces degenerate clustering on unit-normalized features (imbalance=1000 every iter, Val NMI≈0.46) due to its random 256K subsample init; TorchFAISS converges stably (Val NMI=0.79). In the no-triton ablation on 20×, INT8 assign reduces full-train assignment time substantially while training pass time increases.</p>
                     </div>
                 </section>
 
@@ -462,7 +499,9 @@
                 });
             }, { rootMargin: '-20% 0px -80% 0px' });
 
-            sections.forEach(sec => observer.observe(sec));
+            sections.forEach(sec => {
+                observer.observe(sec);
+            });
         });
     </script>
 </body>
