@@ -180,6 +180,48 @@ Observed trade-off on 20×:
 - INT8 training pass is slower in this setup (~29% slower)
 - Validation clustering quality remains close (slightly higher NMI/purity in this run)
 
+### 20× Full-Data Benchmark v2 (Post-Optimization, No Triton)
+
+This version includes the BF16 path optimization that caches BF16 centroids per assign/update stage to avoid repeated conversion overhead.
+
+Measured with:
+
+- `torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_full_fp32_notriton_after_bf16cache --max_points_per_centroid 25624`
+- `torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_full_bf16_notriton_after_bf16cache --bf16 --max_points_per_centroid 25624`
+- `torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_full_int8_fixed_notriton --int8_assign --int8_fixed_scale 0.01 --max_points_per_centroid 25624`
+
+| Mode | Train (s) | Assign-Train (s) | Assign-Val (s) | Val NMI | Val Purity | Train Peak Mem |
+|---|---:|---:|---:|---:|---:|---:|
+| FP32 (full, no triton) | **12.92** | **58.39** | 0.42 | 0.7935 | 0.5415 | **11471.0 MB** |
+| BF16 (full, no triton) | 12.98 | 58.53 | **0.38** | **0.7948** | **0.5429** | 11472.6 MB |
+| INT8 fixed-scale=0.01 (full, no triton) | 12.32 | 62.94 | 0.48 | 0.7920 | 0.5399 | 11567.8 MB |
+
+Readout:
+
+- FP32 and BF16 are now very close end-to-end on full-data 20× (train gap ~0.5%)
+- BF16 wins on val assignment latency and slightly improves NMI/purity in this run
+- INT8 fixed-scale path still needs scale tuning for best speed/quality trade-off on this workload
+
+### FAISS Retest (Original Pipeline Re-run)
+
+To keep comparisons honest, the original FAISS scripts were re-run and independently evaluated.
+
+| Dataset | Train (s) | Assign-Train (s) | Assign-Val (s) | Val NMI | Val Purity |
+|---|---:|---:|---:|---:|---:|
+| FAISS 1× retest (`results_faiss_retest`) | 17.35 | 0.32 | 0.04 | 0.4591 | 0.0179 |
+| FAISS 20× retest (`results_20x_faiss_retest`) | 72.36 | 5.88 | 0.10 | 0.0003 | 0.0010 |
+
+Retest reports:
+
+- `results_faiss_retest/FAISS_EVALUATION_REPORT.md`
+- `results_20x_faiss_retest/FAISS_EVALUATION_REPORT.md`
+
+Notable quality diagnostics from retest artifacts:
+
+- 1× retest non-empty clusters: **2 / 998**
+- 20× retest non-empty clusters: **134 / 998**
+- Both retests show near-random top-1 mapping accuracy (**0.0010**) in evaluation summaries
+
 > **Why FAISS degenerates on this dataset**: These CLIP features are unit-normalized (L2 norm ≈ 1.0). FAISS
 > subsamples to 256K points and initializes centroids randomly from that subsample. On a unit hypersphere
 > with d=768, random init leads to all points being equidistant from all centroids, causing every cluster
@@ -257,6 +299,16 @@ torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --resu
 # 20x no-triton ablation (FP32 vs INT8 assign)
 torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_fp32_notriton
 torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_int8_notriton --int8_assign
+
+# sampling control (default keeps current behavior):
+# --max_points_per_centroid 256  => current default subsampling policy
+# full-data clustering (no subsample): use ceil(N_train / k)
+# for 20x ImageNet here: ceil(25,623,360 / 1000) = 25,624
+
+# full-data clustering speed experiment on 20x (no triton)
+torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_full_fp32_notriton --max_points_per_centroid 25624
+torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_full_bf16_notriton --bf16 --max_points_per_centroid 25624
+torchrun --nproc_per_node=8 benchmark_20x.py --feature_dir ./features_20x --result_dir ./results_20x_full_int8_notriton --int8_assign --max_points_per_centroid 25624
 
 # precision/speed/memory comparison across modes (single GPU)
 python benchmark_precision_modes.py --feature_dir ./features --output ./results/precision_modes.json

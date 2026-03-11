@@ -401,6 +401,90 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="benchmark-card" style="margin-top: 1.2rem; border: 1px solid rgba(0, 128, 255, 0.25); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);">
+                        <h3>20× Full-Data Benchmark v2 (Post-Optimization, No Triton)</h3>
+                        <p class="card-meta">BF16 path optimized with centroid BF16 caching; full-data train via max_points_per_centroid=25624</p>
+                        <table class="academic-table">
+                            <thead>
+                                <tr>
+                                    <th>Mode</th>
+                                    <th>Train (s)</th>
+                                    <th>Assign-Train (s)</th>
+                                    <th>Assign-Val (s)</th>
+                                    <th>Val NMI</th>
+                                    <th>Val Purity</th>
+                                    <th>Train Peak Mem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>FP32 (full, no Triton)</td>
+                                    <td><span class="accent-text">12.92</span></td>
+                                    <td><span class="accent-text">58.39</span></td>
+                                    <td class="muted-col">0.42</td>
+                                    <td class="muted-col">0.7935</td>
+                                    <td class="muted-col">0.5415</td>
+                                    <td><span class="accent-text">11471.0 MB</span></td>
+                                </tr>
+                                <tr class="highlight-row">
+                                    <td>BF16 (full, no Triton)</td>
+                                    <td class="muted-col">12.98</td>
+                                    <td class="muted-col">58.53</td>
+                                    <td><span class="accent-text">0.38</span></td>
+                                    <td><span class="accent-text">0.7948</span></td>
+                                    <td><span class="accent-text">0.5429</span></td>
+                                    <td class="muted-col">11472.6 MB</td>
+                                </tr>
+                                <tr>
+                                    <td>INT8 fixed-scale=0.01 (full)</td>
+                                    <td class="muted-col">12.32</td>
+                                    <td class="muted-col">62.94</td>
+                                    <td class="muted-col">0.48</td>
+                                    <td class="muted-col">0.7920</td>
+                                    <td class="muted-col">0.5399</td>
+                                    <td class="muted-col">11567.8 MB</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="benchmark-card" style="margin-top: 1.2rem; border: 1px solid rgba(255, 170, 0, 0.28); background: linear-gradient(180deg, rgba(255,170,0,0.05), rgba(255,170,0,0.01));">
+                        <h3>FAISS Retest (Original Pipeline Re-run)</h3>
+                        <p class="card-meta">Independent rerun with original FAISS scripts on 1× and 20× datasets</p>
+                        <table class="academic-table">
+                            <thead>
+                                <tr>
+                                    <th>Dataset</th>
+                                    <th>Train (s)</th>
+                                    <th>Assign-Train (s)</th>
+                                    <th>Assign-Val (s)</th>
+                                    <th>Val NMI</th>
+                                    <th>Val Purity</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>FAISS 1× retest</td>
+                                    <td>17.35</td>
+                                    <td><span class="accent-text">0.32</span></td>
+                                    <td><span class="accent-text">0.04</span></td>
+                                    <td class="muted-col">0.4591</td>
+                                    <td class="muted-col">0.0179</td>
+                                </tr>
+                                <tr>
+                                    <td>FAISS 20× retest</td>
+                                    <td>72.36</td>
+                                    <td><span class="accent-text">5.88</span></td>
+                                    <td><span class="accent-text">0.10</span></td>
+                                    <td class="muted-col">0.0003</td>
+                                    <td class="muted-col">0.0010</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="card-meta" style="margin-top: .65rem;">
+                            Reports: <code>results_faiss_retest/FAISS_EVALUATION_REPORT.md</code> and
+                            <code>results_20x_faiss_retest/FAISS_EVALUATION_REPORT.md</code>
+                        </p>
+                    </div>
                     <div class="admonition admonition-note">
                         <div class="admonition-title">Benchmark Methodology</div>
                         <p>Both methods run on 8 GPUs with identical data (ImageNet CLIP features, d=768, unit-normalized), k=1000, niter=20, seed=1234.
@@ -487,7 +571,7 @@
                         navLinks.forEach(link => {
                             link.classList.remove('active');
                             const href = link.getAttribute('href');
-                            if (href === '#' + entry.target.id) {
+                            if (href === `#${entry.target.id}`) {
                                 link.classList.add('active');
                                 const parent = link.closest('.subnav');
                                 if (parent) {
