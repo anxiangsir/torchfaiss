@@ -85,6 +85,7 @@ class TorchKmeans:
         bf16: bool = False,
         use_triton: bool = False,
         int8_assign: bool = False,
+        int8_fixed_scale: Optional[float] = None,
     ):
         self.d = d
         self.k = k
@@ -100,7 +101,10 @@ class TorchKmeans:
         self.bf16 = bf16
         self.use_triton = use_triton
         self.int8_assign = int8_assign
+        self.int8_fixed_scale = int8_fixed_scale
         self.centroids: Optional[np.ndarray] = None
+        if self.int8_fixed_scale is not None and self.int8_fixed_scale <= 0:
+            raise ValueError("int8_fixed_scale must be > 0 when provided")
 
         # Resolve device
         if distributed:
@@ -162,9 +166,16 @@ class TorchKmeans:
             return (xb.to(torch.bfloat16) @ centroids.to(torch.bfloat16).t()).float()
         return xb @ centroids.t()
 
+    def _dot_bf16_cached(self, xb: torch.Tensor, centroids_bf16: torch.Tensor) -> torch.Tensor:
+        return (xb.to(torch.bfloat16) @ centroids_bf16.t()).float()
+
     def _dot_int8(self, xb: torch.Tensor, centroids: torch.Tensor) -> torch.Tensor:
-        x_scale = xb.abs().amax().clamp(min=1e-8) / 127.0
-        c_scale = centroids.abs().amax().clamp(min=1e-8) / 127.0
+        if self.int8_fixed_scale is None:
+            x_scale = xb.abs().amax().clamp(min=1e-8) / 127.0
+            c_scale = centroids.abs().amax().clamp(min=1e-8) / 127.0
+        else:
+            x_scale = torch.tensor(self.int8_fixed_scale, device=xb.device, dtype=xb.dtype)
+            c_scale = torch.tensor(self.int8_fixed_scale, device=centroids.device, dtype=centroids.dtype)
         x_q = torch.clamp(torch.round(xb / x_scale), -127, 127).to(torch.int8)
         c_q = torch.clamp(torch.round(centroids / c_scale), -127, 127).to(torch.int8)
         dots_i32 = torch._int_mm(x_q, c_q.t())
@@ -191,6 +202,13 @@ class TorchKmeans:
     def _dists_eager(self, xb: torch.Tensor, centroids: torch.Tensor, c_sq: torch.Tensor) -> torch.Tensor:
         x_sq = (xb * xb).sum(dim=1)
         dots = self._dot(xb, centroids)
+        dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)
+        dists.clamp_(min=0.0)
+        return dists
+
+    def _dists_bf16_cached(self, xb: torch.Tensor, centroids_bf16: torch.Tensor, c_sq: torch.Tensor) -> torch.Tensor:
+        x_sq = (xb * xb).sum(dim=1)
+        dots = self._dot_bf16_cached(xb, centroids_bf16)
         dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)
         dists.clamp_(min=0.0)
         return dists
@@ -320,6 +338,7 @@ class TorchKmeans:
         # Precompute ||c||^2  [k]
         c_sq = (centroids * centroids).sum(dim=1)
         compiled_fn = self._compiled_pairwise
+        centroids_bf16 = centroids.to(torch.bfloat16) if self._bf16_enabled else None
         if n == 0:
             return D_all, I_all
 
@@ -331,6 +350,8 @@ class TorchKmeans:
                 dists = self._dists_int8(xb, centroids, c_sq)
             elif compiled_fn is not None and self._use_compiled_backend(xb, centroids, batch_size):
                 dists = compiled_fn(xb, centroids, c_sq)
+            elif centroids_bf16 is not None:
+                dists = self._dists_bf16_cached(xb, centroids_bf16, c_sq)
             else:
                 dists = self._dists_eager(xb, centroids, c_sq)
 
@@ -489,7 +510,10 @@ class TorchKmeans:
         if self.int8_assign and not self._int8_enabled:
             self._log("INT8 assignment requested but unsupported on current runtime; falling back to FP path")
         if self._int8_enabled:
-            self._log("INT8 assignment path enabled")
+            if self.int8_fixed_scale is None:
+                self._log("INT8 assignment path enabled (dynamic scale)")
+            else:
+                self._log(f"INT8 assignment path enabled (fixed scale={self.int8_fixed_scale})")
 
         best_centroids = None
         best_obj = float("inf")
@@ -531,6 +555,7 @@ class TorchKmeans:
         centroids = torch.from_numpy(self.centroids).to(self.device)
         c_sq = (centroids * centroids).sum(dim=1)  # [k]
         compiled_fn = self._compiled_pairwise
+        centroids_bf16 = centroids.to(torch.bfloat16) if self._bf16_enabled else None
 
         # Handle numpy input directly — stream to GPU in chunks
         if isinstance(x, np.ndarray):
@@ -546,6 +571,8 @@ class TorchKmeans:
                     dists = self._dists_int8(xb, centroids, c_sq)
                 elif compiled_fn is not None and self._use_compiled_backend(xb, centroids, batch_size):
                     dists = compiled_fn(xb, centroids, c_sq)
+                elif centroids_bf16 is not None:
+                    dists = self._dists_bf16_cached(xb, centroids_bf16, c_sq)
                 else:
                     dists = self._dists_eager(xb, centroids, c_sq)
                 min_d, min_i = dists.min(dim=1)

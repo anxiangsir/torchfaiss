@@ -47,6 +47,8 @@ def main():
     parser.add_argument("--bf16", action="store_true")
     parser.add_argument("--use_triton", action="store_true")
     parser.add_argument("--int8_assign", action="store_true")
+    parser.add_argument("--int8_fixed_scale", type=float, default=None)
+    parser.add_argument("--max_points_per_centroid", type=int, default=256)
     args = parser.parse_args()
 
     dist.init_process_group(backend="nccl")
@@ -91,6 +93,8 @@ def main():
         bf16=args.bf16,
         use_triton=args.use_triton,
         int8_assign=args.int8_assign,
+        int8_fixed_scale=args.int8_fixed_scale,
+        max_points_per_centroid=args.max_points_per_centroid,
     )
 
     t0 = time.time()
@@ -151,6 +155,8 @@ def main():
             "bf16": args.bf16,
             "use_triton": args.use_triton,
             "int8_assign": args.int8_assign,
+            "int8_fixed_scale": args.int8_fixed_scale,
+            "max_points_per_centroid": args.max_points_per_centroid,
             "train_time": round(train_time, 3),
             "assign_train_time": round(assign_train_time, 3),
             "assign_val_time": round(assign_val_time, 3),
