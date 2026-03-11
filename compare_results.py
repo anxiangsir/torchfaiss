@@ -181,7 +181,7 @@ def print_runtime_table(runtime_results: List[Dict[str, Any]]) -> None:
     print("  KMeans Benchmark Comparison: TorchFAISS vs FAISS")
     print(f"{'=' * 132}")
     header = (
-        f"{'Method':<28} {'Train(s)':<10} {'Assign(s)':<10} {'ValObj':<14} "
+        f"{'Method':<28} {'Mode':<14} {'Train(s)':<10} {'Assign(s)':<10} {'Mem(MB)':<10} {'ValObj':<14} "
         f"{'NMI':<8} {'Purity':<8} {'Top1':<8} {'Top5':<8} {'P':<8} {'R':<8} {'F1':<8} {'ROC-AUC':<9} {'PR-AUC':<9}"
     )
     print(header)
@@ -189,14 +189,29 @@ def print_runtime_table(runtime_results: List[Dict[str, Any]]) -> None:
 
     for item in runtime_results:
         assign_time = item.get("assign_train_time", 0.0) + item.get("assign_val_time", 0.0)
+        mode_parts: List[str] = ["fp32"]
+        if item.get("bf16", False):
+            mode_parts.append("bf16")
+        if item.get("use_triton", False):
+            mode_parts.append("triton")
+        if item.get("int8_assign", False):
+            mode_parts.append("int8")
+        mode = "+".join(mode_parts)
+        peak_mem = max(
+            float(item.get("train_peak_mem_mb", 0.0)),
+            float(item.get("assign_train_peak_mem_mb", 0.0)),
+            float(item.get("assign_val_peak_mem_mb", 0.0)),
+        )
         eval_summary = item.get("evaluation", {})
         clustering = eval_summary.get("clustering", {})
         classification = eval_summary.get("classification", {})
         curves = eval_summary.get("curves", {})
         print(
             f"{item['method']:<28} "
+            f"{mode:<14} "
             f"{item.get('train_time', 0.0):<10.2f} "
             f"{assign_time:<10.2f} "
+            f"{peak_mem:<10.1f} "
             f"{item.get('val_obj', 0.0):<14.0f} "
             f"{clustering.get('nmi', 0.0):<8.4f} "
             f"{clustering.get('purity', 0.0):<8.4f} "

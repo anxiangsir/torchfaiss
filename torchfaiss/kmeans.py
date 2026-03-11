@@ -19,6 +19,12 @@ import torch
 import torch.distributed as dist
 from typing import Optional, Tuple, Union
 
+try:
+    import triton  # noqa: F401
+    _TRITON_AVAILABLE = True
+except Exception:
+    _TRITON_AVAILABLE = False
+
 ArrayLike = Union[np.ndarray, torch.Tensor]
 
 
@@ -77,6 +83,8 @@ class TorchKmeans:
         gpu: Union[bool, int] = False,
         distributed: bool = False,
         bf16: bool = False,
+        use_triton: bool = False,
+        int8_assign: bool = False,
     ):
         self.d = d
         self.k = k
@@ -90,6 +98,8 @@ class TorchKmeans:
         self.frozen_centroids = frozen_centroids
         self.distributed = distributed
         self.bf16 = bf16
+        self.use_triton = use_triton
+        self.int8_assign = int8_assign
         self.centroids: Optional[np.ndarray] = None
 
         # Resolve device
@@ -113,6 +123,33 @@ class TorchKmeans:
             and torch.cuda.is_available()
             and torch.cuda.is_bf16_supported()
         )
+        self._int8_enabled = (
+            self.int8_assign
+            and self.device.type == "cuda"
+            and torch.cuda.is_available()
+            and hasattr(torch, "_int_mm")
+        )
+        self._triton_enabled = (
+            self.use_triton
+            and self.device.type == "cuda"
+            and torch.cuda.is_available()
+            and _TRITON_AVAILABLE
+        )
+        self._compiled_pairwise = None
+        if self._triton_enabled:
+            def _pairwise_distance(xb: torch.Tensor, c: torch.Tensor, c_sq: torch.Tensor) -> torch.Tensor:
+                x_sq = (xb * xb).sum(dim=1)
+                dots = xb @ c.t()
+                dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)
+                return torch.clamp(dists, min=0.0)
+
+            self._compiled_pairwise = torch.compile(_pairwise_distance, mode="max-autotune")
+        self._compiled_warmed_up = False
+        self._triton_min_k = 1024
+
+        if self.device.type == "cuda" and torch.cuda.is_available():
+            torch.set_float32_matmul_precision("high")
+            torch.backends.cuda.matmul.allow_tf32 = True
 
     def _to_tensor(self, x: ArrayLike) -> torch.Tensor:
         """Convert input to float32 torch.Tensor on self.device."""
@@ -124,6 +161,53 @@ class TorchKmeans:
         if self._bf16_enabled:
             return (xb.to(torch.bfloat16) @ centroids.to(torch.bfloat16).t()).float()
         return xb @ centroids.t()
+
+    def _dot_int8(self, xb: torch.Tensor, centroids: torch.Tensor) -> torch.Tensor:
+        x_scale = xb.abs().amax().clamp(min=1e-8) / 127.0
+        c_scale = centroids.abs().amax().clamp(min=1e-8) / 127.0
+        x_q = torch.clamp(torch.round(xb / x_scale), -127, 127).to(torch.int8)
+        c_q = torch.clamp(torch.round(centroids / c_scale), -127, 127).to(torch.int8)
+        dots_i32 = torch._int_mm(x_q, c_q.t())
+        return dots_i32.float() * (x_scale * c_scale)
+
+    def _warmup_compiled_pairwise(self, x: torch.Tensor) -> None:
+        if (
+            self._compiled_pairwise is None
+            or self._compiled_warmed_up
+            or x.shape[0] == 0
+            or self.k < self._triton_min_k
+        ):
+            return
+        warm_bs = int(min(131072, x.shape[0]))
+        xb = x[:warm_bs]
+        centroids = xb[:min(self.k, xb.shape[0])]
+        if centroids.shape[0] < self.k:
+            pad = torch.zeros(self.k - centroids.shape[0], self.d, device=self.device, dtype=xb.dtype)
+            centroids = torch.cat([centroids, pad], dim=0)
+        c_sq = (centroids * centroids).sum(dim=1)
+        _ = self._compiled_pairwise(xb, centroids, c_sq)
+        self._compiled_warmed_up = True
+
+    def _dists_eager(self, xb: torch.Tensor, centroids: torch.Tensor, c_sq: torch.Tensor) -> torch.Tensor:
+        x_sq = (xb * xb).sum(dim=1)
+        dots = self._dot(xb, centroids)
+        dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)
+        dists.clamp_(min=0.0)
+        return dists
+
+    def _dists_int8(self, xb: torch.Tensor, centroids: torch.Tensor, c_sq: torch.Tensor) -> torch.Tensor:
+        x_sq = (xb * xb).sum(dim=1)
+        dots = self._dot_int8(xb, centroids)
+        dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)
+        dists.clamp_(min=0.0)
+        return dists
+
+    def _use_compiled_backend(self, xb: torch.Tensor, centroids: torch.Tensor, batch_size: int) -> bool:
+        return (
+            self._compiled_pairwise is not None
+            and centroids.shape[0] >= self._triton_min_k
+            and xb.shape[0] == batch_size
+        )
 
     def _log(self, msg: str):
         if self.verbose:
@@ -235,22 +319,20 @@ class TorchKmeans:
 
         # Precompute ||c||^2  [k]
         c_sq = (centroids * centroids).sum(dim=1)
+        compiled_fn = self._compiled_pairwise
+        if n == 0:
+            return D_all, I_all
 
         for start in range(0, n, batch_size):
             end = min(start + batch_size, n)
             xb = x[start:end]  # [bs, d]
 
-            # ||x||^2  [bs]
-            x_sq = (xb * xb).sum(dim=1)
-
-            # x · c^T  [bs, k]
-            dots = self._dot(xb, centroids)
-
-            # ||x - c||^2 = ||x||^2 - 2*x·c + ||c||^2
-            dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)  # [bs, k]
-
-            # Clamp to avoid negative due to float precision
-            dists.clamp_(min=0.0)
+            if self._int8_enabled:
+                dists = self._dists_int8(xb, centroids, c_sq)
+            elif compiled_fn is not None and self._use_compiled_backend(xb, centroids, batch_size):
+                dists = compiled_fn(xb, centroids, c_sq)
+            else:
+                dists = self._dists_eager(xb, centroids, c_sq)
 
             min_d, min_i = dists.min(dim=1)
             D_all[start:end] = min_d
@@ -382,6 +464,7 @@ class TorchKmeans:
 
         # Subsample if needed
         x = self._subsample(x)
+        self._warmup_compiled_pairwise(x)
 
         n_local = x.shape[0]
         if self.distributed:
@@ -399,6 +482,14 @@ class TorchKmeans:
             self._log("BF16 requested but unavailable on current device; falling back to FP32")
         if self._bf16_enabled:
             self._log("BF16 enabled for centroid distance matmul")
+        if self.use_triton and not self._triton_enabled:
+            self._log("Triton requested but unavailable in current runtime; falling back to eager path")
+        if self._triton_enabled:
+            self._log("Triton-backed torch.compile distance path enabled")
+        if self.int8_assign and not self._int8_enabled:
+            self._log("INT8 assignment requested but unsupported on current runtime; falling back to FP path")
+        if self._int8_enabled:
+            self._log("INT8 assignment path enabled")
 
         best_centroids = None
         best_obj = float("inf")
@@ -439,19 +530,24 @@ class TorchKmeans:
         assert self.centroids is not None, "Must call train() first"
         centroids = torch.from_numpy(self.centroids).to(self.device)
         c_sq = (centroids * centroids).sum(dim=1)  # [k]
+        compiled_fn = self._compiled_pairwise
 
         # Handle numpy input directly — stream to GPU in chunks
         if isinstance(x, np.ndarray):
             n = x.shape[0]
             D_all = np.empty(n, dtype=np.float32)
             I_all = np.empty(n, dtype=np.int64)
+            if n == 0:
+                return D_all, I_all
             for start in range(0, n, batch_size):
                 end = min(start + batch_size, n)
                 xb = torch.from_numpy(x[start:end]).float().to(self.device)
-                x_sq = (xb * xb).sum(dim=1)
-                dots = self._dot(xb, centroids)
-                dists = x_sq.unsqueeze(1) - 2 * dots + c_sq.unsqueeze(0)
-                dists.clamp_(min=0.0)
+                if self._int8_enabled:
+                    dists = self._dists_int8(xb, centroids, c_sq)
+                elif compiled_fn is not None and self._use_compiled_backend(xb, centroids, batch_size):
+                    dists = compiled_fn(xb, centroids, c_sq)
+                else:
+                    dists = self._dists_eager(xb, centroids, c_sq)
                 min_d, min_i = dists.min(dim=1)
                 D_all[start:end] = min_d.cpu().numpy()
                 I_all[start:end] = min_i.cpu().numpy()

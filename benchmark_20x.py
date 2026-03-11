@@ -45,6 +45,8 @@ def main():
     parser.add_argument("--niter", type=int, default=20)
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--bf16", action="store_true")
+    parser.add_argument("--use_triton", action="store_true")
+    parser.add_argument("--int8_assign", action="store_true")
     args = parser.parse_args()
 
     dist.init_process_group(backend="nccl")
@@ -85,12 +87,19 @@ def main():
     dist.barrier()
     km = TorchKmeans(
         d=d, k=args.k, niter=args.niter,
-        verbose=True, seed=args.seed, distributed=True, bf16=args.bf16,
+        verbose=True,
+        seed=args.seed,
+        distributed=True,
+        bf16=args.bf16,
+        use_triton=args.use_triton,
+        int8_assign=args.int8_assign,
     )
 
     t0 = time.time()
+    torch.cuda.reset_peak_memory_stats(local_rank)
     km.train(train_local)
     train_time = time.time() - t0
+    train_peak_mem_mb = torch.cuda.max_memory_allocated(local_rank) / (1024 ** 2)
 
     del train_local  # free memory before assign
 
@@ -98,6 +107,7 @@ def main():
         # Assign full train set (streaming from mmap, GPU-batched)
         print(f"\nAssigning train set ({n_train} vectors) ...")
         t0 = time.time()
+        torch.cuda.reset_peak_memory_stats(local_rank)
         # Read from mmap in large chunks to reduce I/O overhead, but assign in GPU batches
         chunk_size = 1_000_000  # 1M vectors per read from disk
         D_train_list = []
@@ -112,6 +122,7 @@ def main():
         D_train = np.concatenate(D_train_list)
         I_train = np.concatenate(I_train_list)
         assign_train_time = time.time() - t0
+        assign_train_peak_mem_mb = torch.cuda.max_memory_allocated(local_rank) / (1024 ** 2)
         train_obj = D_train.sum()
 
         # Assign val set
@@ -119,8 +130,10 @@ def main():
         val_labels = np.load(os.path.join(args.feature_dir, "val_labels.npy"))
         print(f"Assigning val set ({val_features.shape[0]} vectors) ...")
         t0 = time.time()
+        torch.cuda.reset_peak_memory_stats(local_rank)
         D_val, I_val = km.assign(val_features)
         assign_val_time = time.time() - t0
+        assign_val_peak_mem_mb = torch.cuda.max_memory_allocated(local_rank) / (1024 ** 2)
         val_obj = D_val.sum()
 
         # Metrics — use labels (tiled labels are periodic)
@@ -135,6 +148,7 @@ def main():
         print(f"  Val vectors:    {val_features.shape[0]:,}")
         print(f"  Train time:     {train_time:.2f} s")
         print(f"  Assign time:    {assign_train_time:.2f} s (train), {assign_val_time:.2f} s (val)")
+        print(f"  Peak mem:       {train_peak_mem_mb:.1f} MB (train), {assign_train_peak_mem_mb:.1f} MB (assign-train), {assign_val_peak_mem_mb:.1f} MB (assign-val)")
         print(f"  Train Obj:      {train_obj:.0f}")
         print(f"  Val Obj:        {val_obj:.0f}")
         print(f"  Train NMI:      {nmi_train:.4f}")
@@ -158,11 +172,16 @@ def main():
             "method": f"TorchFAISS Dist({world_size}GPU)",
             "k": args.k, "niter": args.niter,
             "bf16": args.bf16,
+            "use_triton": args.use_triton,
+            "int8_assign": args.int8_assign,
             "n_train": int(n_train),
             "n_val": int(val_features.shape[0]),
             "train_time": round(train_time, 3),
             "assign_train_time": round(assign_train_time, 3),
             "assign_val_time": round(assign_val_time, 3),
+            "train_peak_mem_mb": round(train_peak_mem_mb, 3),
+            "assign_train_peak_mem_mb": round(assign_train_peak_mem_mb, 3),
+            "assign_val_peak_mem_mb": round(assign_val_peak_mem_mb, 3),
             "train_obj": float(train_obj),
             "val_obj": float(val_obj),
             "train_nmi": round(nmi_train, 4),
